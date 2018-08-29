@@ -12,12 +12,13 @@
 
 
 class LabelledRangeDescription:
-    def __init__(self, lowest, highest, label, numeric_formatter):
+    def __init__(self, lowest, highest, label, numeric_formatter, doc):
         self.lowest = lowest
         self.highest = highest
         self.label = label
         self.numeric_formatter = numeric_formatter
         # When parsing, any base is allowed with the appropriate prefix.
+        self.doc = doc # Unused for now.
 
 
     def __str__(self):
@@ -65,16 +66,17 @@ class LabelledRangeDescription:
 
 
 class RangeDescription:
-    def __init__(self, lowest, highest, numeric_formatter):
+    def __init__(self, lowest, highest, numeric_formatter, doc):
         self.lowest = lowest
         self.highest = highest
         self.numeric_formatter = numeric_formatter
         # When parsing, any base is allowed with the appropriate prefix.
+        self.doc = doc # Unused for now.
 
 
     def __str__(self):
         low = self.numeric_formatter(self.lowest)
-        high = self.numeric_formattter(self.highest)
+        high = self.numeric_formatter(self.highest)
         if self.lowest == self.highest:
             return f'RangeDescription: {low}'
         else:
@@ -100,8 +102,9 @@ class RangeDescription:
 
 
 class FlagsDescription:
-    def __init__(self, names):
+    def __init__(self, names, doc):
         self.names = names
+        self.doc = doc # Unused for now.
 
 
     def __str__(self):
@@ -132,15 +135,14 @@ class FlagsDescription:
         return None if set_flags else value
 
 
-class Field:
-    def __init__(self, name, bits, bias, signed, fixed, descriptions):
-        # The bias is added when assembling, deducted when disassembling.
+class RawField:
+    def __init__(self, name, bits, bias, signed, fixed):
         self.name = name
+        # The bias is added when assembling, deducted when disassembling.
         self.bits = bits
         self.bias = bias
         self.signed = signed
         self.fixed = fixed
-        self.descriptions = descriptions
 
 
     @property
@@ -160,13 +162,13 @@ class Field:
 
     @property
     def maximum(self):
-        return (self.count if self.signed else self.halfcount) - 1 - self.bias
+        return (self.halfcount if self.signed else self.count) - 1 - self.bias
 
 
     # Convert unsigned value from the data into one that will be formatted.
     def value(self, raw):
         assert 0 <= raw < self.count
-        if signed and raw >= self.halfcount:
+        if self.signed and raw >= self.halfcount:
             raw -= self.count
         return raw - self.bias
 
@@ -174,11 +176,11 @@ class Field:
     # Convert value computed from parsing into one stored in the data.
     def raw(self, value):
         if not self.minimum <= value <= self.maximum:
-            raise ValueError(
+            self.throw(
                 f'{value} out of range {self.minimum}..{self.maximum}'
             )
         value += self.bias
-        if signed and value < 0:
+        if self.signed and value < 0:
             assert value >= -self.halfcount
             value += self.count
         assert 0 <= value < self.count
@@ -194,40 +196,71 @@ class Field:
         raise ValueError(f'Field {self.name}: {msg}')
 
 
-    def format(self, raw):
+    def check_fixed_binary(self, raw):
         value = self.value(raw)
         if self.fixed is not None:
             if value != self.fixed:
                 self.throw(
                     f'Expected value {self.fixed} in data; actually {value}'
                 )
-            # The parent Option should filter this out
-            return None
-        for description in self.descriptions:
-            try:
-                result = description.format(text)
-            except ValueError as e:
-                self.throw(e)
-            if result is not None:
-                return result
-        # No exceptions, but nothing worked
-        self.throw(f'No valid format for value: {value}')
+            return True, None
+        return False, value
     
     
-    def parse(self, text):
+    def check_fixed_text(self, text):
         if self.fixed is not None:
             # This value should get hacked in by the parent Option
             assert text is None
-            return self.raw(self.fixed)
+            return self.raw(self.fixed) 
+        return None
+
+
+class Field:
+    def __init__(self, implementation, descriptions, doc):
+        # The bias is added when assembling, deducted when disassembling.
+        self.implementation = implementation
+        self.descriptions = descriptions
+        self.doc = doc # Unused for now.
+
+
+    @property
+    def size(self):
+        return self.implementation.bits
+
+
+    def __str__(self):
+        return str(self.implementation)
+
+
+    def format(self, raw):
+        fixed, value = self.implementation.check_fixed_binary(raw)
+        if fixed:
+            # The parent Option should filter this out
+            return value
+        for description in self.descriptions:
+            try:
+                result = description.format(value)
+            except ValueError as e:
+                self.implementation.throw(e)
+            if result is not None:
+                return result
+        # No exceptions, but nothing worked
+        self.implementation.throw(f'No valid format for value: {value}')
+    
+    
+    def parse(self, text):
+        result = self.implementation.check_fixed_text(text)
+        if result is not None:
+            return result
         for description in self.descriptions:
             try:
                 result = description.parse(text)
             except ValueError as e:
                 self.throw(e)
             if result is not None:
-                return self.raw(result)
+                return self.implementation.raw(result)
         # No exceptions, but nothing worked
-        self.throw(f"Couldn't parse: '{text}'")
+        self.implementation.throw(f"Couldn't parse: '{text}'")
 
 
 class Option:
@@ -238,7 +271,7 @@ class Option:
 
     @property
     def arguments(self):
-        return len(fields) - len(self.fixed_positions)
+        return len(self.fields) - len(self.fixed_positions)
 
 
     def format(self, full_value):
@@ -246,10 +279,10 @@ class Option:
         results = []
         for i, field in enumerate(self.fields):
             skip = i in self.fixed_positions
-            bits = field.bits
+            bits = field.size
             # TODO: think about how to support other endianness.
             raw = full_value & ((1 << bits) - 1)
-            full_value >>= field.bits
+            full_value >>= bits 
             result = field.format(raw)
             assert skip == (result is None)
             if not skip:
@@ -266,20 +299,21 @@ class Option:
             skip = i in self.fixed_positions
             item = None if skip else next(item_source)
             result = field.parse(item)
-            assert 0 <= result < (1 << field.bits)
+            assert 0 <= result < (1 << field.size)
             value |= result << bit
-            bit += field.bits
-        return result
+            bit += field.size
+        return value
 
 
 class Type:
     # All constraints to be verified in an external process.
     # Do not call this constructor directly.
-    def __init__(self, name, size, format_option, option_map):
+    def __init__(self, name, size, format_option, option_map, doc):
         self.name = name
         self.size = size
         self.format_option = format_option
         self.option_map = option_map
+        self.doc = doc # Unused for now.
 
 
     def format(self, value):
@@ -292,6 +326,6 @@ class Type:
             parser = self.option_map[len(items)]
         except KeyError:
             raise ValueError(
-                'Invalid number of parameters for {self.name} type'
+                f'Invalid number of parameters for {self.name} type'
             )
         return parser.parse(items).to_bytes(self.size // 8, 'little')
