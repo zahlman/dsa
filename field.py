@@ -1,5 +1,6 @@
 from parse_config import parse_base, parse_bool, parse_int
 from parse_config import fill_template, parse_flags
+from functools import partial
 
 
 class RawField:
@@ -130,7 +131,7 @@ class Field:
         self.implementation.throw(f"Couldn't parse: '{text}'")
 
 
-def parse_nbo(nbo):
+def _parse_nbo(nbo):
     items = [x.strip() for x in nbo.split(':')]
     if len(items) == 2:
         name, bits = items
@@ -143,39 +144,40 @@ def parse_nbo(nbo):
     return name.strip(), int(bits, 0), order
 
 
-class FieldBuilder:
-    def __init__(self, line_tokens, doc):
-        nbo, *flag_tokens = line_tokens
-        self.name, self.bits, self.order = parse_nbo(nbo)
-        self.flags = parse_flags(
-            flag_tokens, 
-            {
-                'bias': (parse_int, 0),
-                'signed': (parse_bool, False),
-                'base': (parse_base, hex),
-                'fixed': (parse_int, None)
-            }
-        )
-        self.doc = doc
-        self.descriptions = []
+def _field(name, bits, order, flags, description_makers, doc, deferred):
+    flags = fill_template(flags, deferred)
+    raw = RawField(
+        name, bits,
+        flags['bias'], flags['signed'], flags['fixed'] 
+    )
+    return order, bits, flags['fixed'] is not None, Field(
+        raw,
+        [
+            d(raw.minimum, raw.maximum, bits, flags['base'])
+            for d in description_makers
+        ],
+        doc
+    )
 
 
-    def add_description(self, desc):
-        self.descriptions.append(desc)
-
-
-    def create(self, deferred):
-        flags = fill_template(self.flags, deferred)
-        raw = RawField(
-            self.name, self.bits,
-            flags['bias'], flags['signed'], flags['fixed'] 
-        )
-        return self.order, self.bits, flags['fixed'] is not None, Field(
-            raw,
-            [
-                d(raw.minimum, raw.maximum, self.bits, flags['base'])
-                for d in self.descriptions
-            ],
-            self.doc
-        )
-
+def field_maker(line_tokens, doc, description_makers):
+    """Creates a factory that will create a Field using deferred info.
+    line_tokens -> tokenized line from the config file.
+    doc -> associated doc lines.
+    description_makers -> factories for contained Descriptions.
+    The factory expects the following parameters:
+    deferred -> a dict of deferred parameters used to customize the Field.
+    In addition to the created Field, the factory will return associated
+    info used for setting up the parent Option properly."""
+    nbo, *flag_tokens = line_tokens
+    name, bits, order = _parse_nbo(nbo)
+    flags = parse_flags(
+        flag_tokens, 
+        {
+            'bias': (parse_int, 0),
+            'signed': (parse_bool, False),
+            'base': (parse_base, hex),
+            'fixed': (parse_int, None)
+        }
+    )
+    return partial(_field, name, bits, order, flags, description_makers, doc)

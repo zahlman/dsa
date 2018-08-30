@@ -1,6 +1,6 @@
 from description import description_maker
 from element import make_option, make_type
-from field import FieldBuilder
+from field import field_maker 
 from parse_config import process
 from functools import partial
 import os
@@ -15,31 +15,43 @@ def is_option_separator(line_tokens):
 
 
 def load_template(filename):
-    current_fields = []
+    descriptions = []
+    field_tokens = None
+    field_doc = None
+    fields = []
     options = []
-    all_doc = []
+    element_doc = []
     name = os.path.splitext(os.path.basename(filename))[0]
     with open(filename) as f:
         for position, indent, line_tokens, doc in process(f):
             if position == 0: # file doc.
-                all_doc.extend(doc)
+                element_doc.extend(doc)
             elif is_option_separator(line_tokens):
-                all_doc.extend(doc)
-                # make an option from the fields accumulated.
-                if not current_fields:
+                element_doc.extend(doc)
+                # set up the last field of the option.
+                if field_tokens is None:
                     throw(position, 'option must have at least one field')
-                options.append(partial(make_option, current_fields))
-                current_fields = []
+                fields.append(field_maker(field_tokens, field_doc, descriptions))
+                descriptions = []
+                # make an option from the fields accumulated.
+                options.append(partial(make_option, fields))
+                fields = []
+                field_tokens = None
+                field_doc = None
             elif indent: # description.
-                if not current_fields:
+                if field_tokens is None:
                     throw(position, 'description must be inside a field')
-                current_fields[-1].add_description(
-                    description_maker(line_tokens, doc)
-                )
+                descriptions.append(description_maker(line_tokens, doc))
             else: # start a new field.
-                current_fields.append(FieldBuilder(line_tokens, doc))
-    # Make the last option.
-    if not current_fields:
+                if field_tokens is not None:
+                    fields.append(field_maker(field_tokens, field_doc, descriptions))
+                descriptions = []
+                field_tokens = line_tokens
+                field_doc = doc
+    # set up the last field of the last option.
+    if field_tokens is None:
         throw(position, 'option must have at least one field')
-    options.append(partial(make_option, current_fields))
-    return partial(make_type, options, name, doc)
+    fields.append(field_maker(field_tokens, field_doc, descriptions))
+    # make the last option.
+    options.append(partial(make_option, fields))
+    return partial(make_type, options, name, element_doc)

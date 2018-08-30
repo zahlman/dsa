@@ -72,7 +72,7 @@ def make_option(field_builders, deferred):
     fixed_mask = []
     size = 0
     for builder in field_builders:
-        order, field_size, is_fixed, field = builder.create(deferred)
+        order, field_size, is_fixed, field = builder(deferred)
         size += field_size
         if order is None:
             fields.append(field)
