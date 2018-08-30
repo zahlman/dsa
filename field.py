@@ -3,14 +3,42 @@ from parse_config import fill_template, parse_flags
 from functools import partial
 
 
+class FixedField:
+    def __init__(self, name, bits, bias, signed, value, doc):
+        self.name = name
+        raw = value + bias
+        count = 1 << bits
+        halfcount = 1 << (bits - 1)
+        if signed and raw < 0:
+            if raw < -halfcount:
+                raise ValueError('fixed value out of representable range')
+            raw += count
+        if not 0 <= raw < count:
+            raise ValueError('fixed value out of representable range')
+        self.raw = raw
+        self.size = bits
+
+
+    def format(self, raw):
+        if raw != self.raw:
+            raise ValueError('incorrect fixed value')
+        # The parent Option should filter this out.
+        return None
+
+
+    def parse(self, value):
+        # The parent Option should ensure this.
+        assert value is None
+        return self.raw
+
+
 class RawField:
-    def __init__(self, name, bits, bias, signed, fixed):
+    def __init__(self, name, bits, bias, signed):
         self.name = name
         # The bias is added when assembling, deducted when disassembling.
         self.bits = bits
         self.bias = bias
         self.signed = signed
-        self.fixed = fixed
 
 
     @property
@@ -64,25 +92,6 @@ class RawField:
         raise ValueError(f'Field {self.name}: {msg}')
 
 
-    def check_fixed_binary(self, raw):
-        value = self.value(raw)
-        if self.fixed is not None:
-            if value != self.fixed:
-                self.throw(
-                    f'Expected value {self.fixed} in data; actually {value}'
-                )
-            return True, None
-        return False, value
-    
-    
-    def check_fixed_text(self, text):
-        if self.fixed is not None:
-            # This value should get hacked in by the parent Option
-            assert text is None
-            return self.raw(self.fixed) 
-        return None
-
-
 class Field:
     def __init__(self, implementation, descriptions, doc):
         # The bias is added when assembling, deducted when disassembling.
@@ -101,10 +110,7 @@ class Field:
 
 
     def format(self, raw):
-        fixed, value = self.implementation.check_fixed_binary(raw)
-        if fixed:
-            # The parent Option should filter this out
-            return value
+        value = self.implementation.value(raw)
         for description in self.descriptions:
             try:
                 result = description.format(value)
@@ -117,9 +123,6 @@ class Field:
     
     
     def parse(self, text):
-        result = self.implementation.check_fixed_text(text)
-        if result is not None:
-            return result
         for description in self.descriptions:
             try:
                 result = description.parse(text)
@@ -146,11 +149,14 @@ def _parse_nbo(nbo):
 
 def _field(name, bits, order, flags, description_makers, doc, deferred):
     flags = fill_template(flags, deferred)
-    raw = RawField(
-        name, bits,
-        flags['bias'], flags['signed'], flags['fixed'] 
-    )
-    return order, bits, flags['fixed'] is not None, Field(
+    fixed, bias, signed = flags['fixed'], flags['bias'], flags['signed']
+    if fixed is not None:
+        return order, bits, True, FixedField(
+            name, bits, bias, signed, fixed, doc
+        )
+
+    raw = RawField(name, bits, bias, signed)
+    return order, bits, False, Field(
         raw,
         [
             d(raw.minimum, raw.maximum, bits, flags['base'])
