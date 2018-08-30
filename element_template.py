@@ -20,8 +20,9 @@ class TemplateLoadingState:
 
 
     def _finish_field(self):
-        fm = field_maker(self.field_tokens, self.field_doc, self.description_makers)
-        self.field_makers[-1].append(fm)
+        self.field_makers[-1].append(field_maker(
+            self.field_tokens, self.field_doc, self.description_makers
+        ))
         self._reset_field_data()
 
 

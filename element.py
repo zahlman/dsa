@@ -97,8 +97,12 @@ def _element(field_maker_groups, name, doc, deferred):
         o_size, option = _option(field_makers, deferred)
         if size is None:
             size = o_size
+            if size % 8:
+                raise ValueError('element size must be a multiple of 8 bits')
         elif size != o_size:
-            raise ValueError('options for element must have the same total size')
+            raise ValueError(
+                'options for element must have the same total size'
+            )
         if option.arguments in option_map:
             raise ValueError(
                 'options for element must have all different argument counts'
