@@ -10,8 +10,6 @@ class FixedField:
         count = 1 << bits
         halfcount = 1 << (bits - 1)
         if signed and raw < 0:
-            if raw < -halfcount:
-                raise ValueError('fixed value out of representable range')
             raw += count
         if not 0 <= raw < count:
             raise ValueError('fixed value out of representable range')
@@ -19,17 +17,9 @@ class FixedField:
         self.size = bits
 
 
-    def format(self, raw):
-        if raw != self.raw:
-            raise ValueError('incorrect fixed value')
-        # The parent Option should filter this out.
-        return None
-
-
-    def parse(self, value):
-        # The parent Option should ensure this.
-        assert value is None
-        return self.raw
+    @property
+    def is_fixed(self):
+        return True
 
 
 class RawField:
@@ -99,6 +89,11 @@ class Field:
         self.descriptions = descriptions
         self.doc = doc # Unused for now.
 
+    
+    @property
+    def is_fixed(self):
+        return False
+
 
     @property
     def size(self):
@@ -127,7 +122,7 @@ class Field:
             try:
                 result = description.parse(text)
             except ValueError as e:
-                self.throw(e)
+                self.implementation.throw(e)
             if result is not None:
                 return self.implementation.raw(result)
         # No exceptions, but nothing worked
@@ -151,12 +146,12 @@ def _field(name, bits, order, flags, description_makers, doc, deferred):
     flags = fill_template(flags, deferred)
     fixed, bias, signed = flags['fixed'], flags['bias'], flags['signed']
     if fixed is not None:
-        return order, bits, True, FixedField(
+        return order, FixedField(
             name, bits, bias, signed, fixed, doc
         )
 
     raw = RawField(name, bits, bias, signed)
-    return order, bits, False, Field(
+    return order, Field(
         raw,
         [
             d(raw.minimum, raw.maximum, bits, flags['base'])
