@@ -125,7 +125,7 @@ class FlagsDescription:
         return None if set_flags else value
 
 
-def is_number_or_blank(text):
+def _is_number_or_blank(text):
     if not text:
         return True
     try:
@@ -135,54 +135,77 @@ def is_number_or_blank(text):
         return False
 
 
-def get_value_range(items, minimum, maximum):
+def _normalize_range(items, minimum, maximum):
     count = len(items)
     if count > 2:
-        raise ValueError('Too many parameters for range description')
-    elif count == 2:
-        low = int(items[0], 0) if items[0] else minimum
-        high = int(items[1], 0) if items[1] else maximum
-    else:
-        # can't be empty here; if there was a label, it would have been
-        # parsed as a flag name, and otherwise the line would be empty.
-        assert count == 1
-        if not items[0]:
-            # This only happens for a LabelledRangeDescription;
-            # otherwise, the whole line would be empty.
-            raise ValueError('No range given for labelled range description')
-        low = int(items[0], 0)
-        high = int(items[0], 0)
-    return low, high
-
-
-def make_description(
-    name, flag_items, range_items, doc, minimum, maximum, bits, formatter
-):
-    if flag_items is not None:
-        if len(flag_items) != bits:
+        raise ValueError('too many parameters for range description')
+    
+    if count == 2:
+        low, high = items
+        low = int(low, 0) if low else minimum
+        high = int(high, 0) if high else maximum
+        if low < minimum or high > maximum:
             raise ValueError(
-                f'expected {bits} flags, got {len(flag_items)}'
+                f"range {low}..{high} can't be represented by this field"
             )
-        return FlagsDescription(flag_items, doc)
-    elif range_items is not None:
-        low, high = get_value_range(range_items, minimum, maximum)
-        if name is None:
-            return RangeDescription(low, high, formatter, doc)
-        else:
-            return LabelledRangeDescription(low, high, name, formatter, doc)
-    else:
-        assert False, 'missing items for description'
+        return low, high
+    
+    # can't be empty here; if there was a label, it would have been
+    # parsed as a flag name, and otherwise the line would be empty.
+    assert count == 1
+    value = items[0]
+    if not value:
+        # This only happens for a LabelledRangeDescription (e.g. `foo:`);
+        # otherwise, the whole line would be empty.
+        raise ValueError('no range given for labelled range description')
+    value = int(value, 0)
+    if not minimum <= value <= maximum:
+        raise ValueError(
+            f"value {value} can't be represented by this field"
+        )
+    return value, value
 
 
-def make_description_maker(line_tokens, doc):
+def _rd(
+    range_items, doc, minimum, maximum, bits, formatter
+):
+    low, high = _normalize_range(range_items, minimum, maximum)
+    return RangeDescription(low, high, formatter, doc)
+
+
+def _lrd(
+    name, range_items, doc, minimum, maximum, bits, formatter
+):
+    low, high = _normalize_range(range_items, minimum, maximum)
+    return LabelledRangeDescription(low, high, name, formatter, doc)
+
+
+def _fd(
+    flag_items, doc, minimum, maximum, bits, formatter
+):
+    if len(flag_items) != bits:
+        raise ValueError(
+            f'expected {bits} flags, got {len(flag_items)}'
+        )
+    return FlagsDescription(flag_items, doc)
+
+
+def description_maker(line_tokens, doc):
+    """Creates a factory that will create a Description using deferred info.
+    line_tokens -> tokenized line from the config file.
+    doc -> associated doc lines.
+    The factory expects the following parameters:
+    minimum -> lowest describable value.
+    maximum -> highest describable value.
+    bits -> number of bits used to represent the value.
+    formatter -> preferred formatting function for int->str conversion."""
     if len(line_tokens) != 1:
         raise ValueError('field description must be a single token')
     items = [t.strip() for t in line_tokens[0].split(':')]
-    if not any(is_number_or_blank(i) for i in items):
-        return partial(make_description, None, items, None, doc)
-    elif is_number_or_blank(items[0]):
-        # name = None
-        return partial(make_description, None, None, items, doc)
+    if not any(_is_number_or_blank(i) for i in items):
+        return partial(_fd, items, doc)
+    elif _is_number_or_blank(items[0]):
+        return partial(_rd, items, doc)
     else:
         name, *items = items
-        return partial(make_description, name, None, items, doc)
+        return partial(_lrd, name, items, doc)

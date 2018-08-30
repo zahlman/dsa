@@ -1,4 +1,4 @@
-from description import make_description_maker
+from description import description_maker
 from element import make_option, make_type
 from field import FieldBuilder
 from parse_config import process
@@ -34,7 +34,7 @@ def load_template(filename):
                 if not current_fields:
                     throw(position, 'description must be inside a field')
                 current_fields[-1].add_description(
-                    make_description_maker(line_tokens, doc)
+                    description_maker(line_tokens, doc)
                 )
             else: # start a new field.
                 current_fields.append(FieldBuilder(line_tokens, doc))
