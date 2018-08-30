@@ -1,0 +1,11 @@
+A Type represents the semantics of a small chunk of data - more or less atomic,
+typically no more than 4 bytes. It logically consists of one or more Options
+for representing the data, each being a way to format the data into a readable
+text string and parse the text back into data. Each Option is logically a
+sequence of Fields, representing sub-ranges of the bits in the data chunk. Each
+Field can either be represented according to one or more Descriptions of the
+underlying field value, or else has a fixed value. The Options for a given Type
+shall each have a different number of Fields in them, all represent the same
+number of bits of data, and have at least one Field each. The data thus
+described shall be a whole number of bytes (non-zero multiple of 8 bits),
+completely described by each Option.
