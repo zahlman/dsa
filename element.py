@@ -52,6 +52,10 @@ class Element:
         self.doc = doc # Unused for now.
 
 
+    def __str__(self):
+        return self.name
+
+
     def format(self, value):
         # Exceptions will be propagated to the Struct level.
         return self.format_option.format(int.from_bytes(value, 'little'))
@@ -103,6 +107,11 @@ def _option(field_makers, deferred):
     return option_size // 8, Option(*option_data)
 
 
+def _parameterize(name, deferred):
+    parameters = sorted(f'{k}={v}' for k, v in deferred.items())
+    return f"name({', '.join(parameters)})"
+
+
 def _element(field_maker_groups, name, doc, deferred):
     format_option = None
     option_map = {}
@@ -124,6 +133,7 @@ def _element(field_maker_groups, name, doc, deferred):
             format_option = option
     if format_option is None:
         raise ValueError('no options provided for element')
+    name = _parameterize(name, deferred)
     return Element(name, size, format_option, option_map, doc)
 
 
