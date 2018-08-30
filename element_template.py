@@ -1,9 +1,62 @@
 from description import description_maker
-from element import make_option, make_type
+from element import element_maker
 from field import field_maker 
 from parse_config import process
 from functools import partial
 import os
+
+
+class TemplateLoadingState:
+    def __init__(self):
+        self._reset_field_data()
+        self.element_doc = []
+        self.field_makers = [[]] # list of lists, one for each Option.
+
+
+    def _reset_field_data(self):
+        self.description_makers = []
+        self.field_tokens = None
+        self.field_doc = None
+
+
+    def _finish_field(self):
+        fm = field_maker(self.field_tokens, self.field_doc, self.description_makers)
+        self.field_makers[-1].append(fm)
+        self._reset_field_data()
+
+
+    def _finish_option(self):
+        if self.field_tokens is None:
+            raise ValueError('option must have at least one field')
+        self._finish_field()
+        assert self.field_makers[-1]
+
+
+    def add_doc(self, doc):
+        self.element_doc.extend(doc)
+
+
+    def push_description(self, line_tokens, doc):
+        if self.field_tokens is None:
+            raise ValueError('description must be inside a field')
+        self.description_makers.append(description_maker(line_tokens, doc))
+
+
+    def start_field(self, line_tokens, doc):
+        if self.field_tokens is not None:
+            self._finish_field()
+        self.field_tokens = line_tokens
+        self.field_doc = doc
+
+
+    def next_option(self):
+        self._finish_option()
+        self.field_makers.append([])
+
+
+    def complete(self):
+        self._finish_option()
+        return self.field_makers, self.element_doc
 
 
 def throw(line, e):
@@ -15,43 +68,17 @@ def is_option_separator(line_tokens):
 
 
 def load_template(filename):
-    descriptions = []
-    field_tokens = None
-    field_doc = None
-    fields = []
-    options = []
-    element_doc = []
+    state = TemplateLoadingState()
     name = os.path.splitext(os.path.basename(filename))[0]
     with open(filename) as f:
         for position, indent, line_tokens, doc in process(f):
-            if position == 0: # file doc.
-                element_doc.extend(doc)
+            if position == 0:
+                state.add_doc(doc)
             elif is_option_separator(line_tokens):
-                element_doc.extend(doc)
-                # set up the last field of the option.
-                if field_tokens is None:
-                    throw(position, 'option must have at least one field')
-                fields.append(field_maker(field_tokens, field_doc, descriptions))
-                descriptions = []
-                # make an option from the fields accumulated.
-                options.append(partial(make_option, fields))
-                fields = []
-                field_tokens = None
-                field_doc = None
-            elif indent: # description.
-                if field_tokens is None:
-                    throw(position, 'description must be inside a field')
-                descriptions.append(description_maker(line_tokens, doc))
-            else: # start a new field.
-                if field_tokens is not None:
-                    fields.append(field_maker(field_tokens, field_doc, descriptions))
-                descriptions = []
-                field_tokens = line_tokens
-                field_doc = doc
-    # set up the last field of the last option.
-    if field_tokens is None:
-        throw(position, 'option must have at least one field')
-    fields.append(field_maker(field_tokens, field_doc, descriptions))
-    # make the last option.
-    options.append(partial(make_option, fields))
-    return partial(make_type, options, name, element_doc)
+                state.add_doc(doc)
+                state.next_option()
+            elif indent:
+                state.push_description(line_tokens, doc)
+            else:
+                state.start_field(line_tokens, doc)
+    return element_maker(name, *state.complete())
