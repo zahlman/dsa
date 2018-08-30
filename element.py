@@ -25,7 +25,10 @@ class Option:
             assert skip == (result is None)
             if not skip:
                 results.append(result)
-        return results
+        result = ', '.join(results)
+        if result != ''.join(result.split()): # embedded whitespace
+            result = f'[{result}]'
+        return result
 
 
     def parse(self, items):
