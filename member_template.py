@@ -1,9 +1,9 @@
 from description import description_maker
-from member import member_maker
 from field import field_maker 
+from member import member_maker
 from parse_config import process
-from functools import partial
-import os
+from functools import lru_cache
+from os.path import basename, splitext
 
 
 class TemplateLoadingState:
@@ -68,18 +68,28 @@ def is_option_separator(line_tokens):
     return len(line_tokens) == 1 and all(c == '-' for c in line_tokens[0])
 
 
-def load(filename):
+# Separating this out is better for testing purposes, as we can create a
+# temporary template from a list of strings without file I/O.
+def create(name, lines):
     state = TemplateLoadingState()
-    name = os.path.splitext(os.path.basename(filename))[0]
-    with open(filename) as f:
-        for position, indent, line_tokens, doc in process(f):
-            if position == 0:
-                state.add_doc(doc)
-            elif is_option_separator(line_tokens):
-                state.add_doc(doc)
-                state.next_option()
-            elif indent:
-                state.push_description(line_tokens, doc)
-            else:
-                state.start_field(line_tokens, doc)
+    for position, indent, line_tokens, doc in process(lines):
+        if position == 0:
+            state.add_doc(doc)
+        elif is_option_separator(line_tokens):
+            state.add_doc(doc)
+            state.next_option()
+        elif indent:
+            state.push_description(line_tokens, doc)
+        else:
+            state.start_field(line_tokens, doc)
     return member_maker(name, *state.complete())
+
+
+# While it's true that the underlying file could change between calls, we would
+# actually prefer to ignore such changes. This ensures a consistent definition
+# for Members declared with the same type.
+@lru_cache(None)
+def load(filename):
+    name = splitext(basename(filename))[0]
+    with open(filename) as f:
+        return create(name, f)
