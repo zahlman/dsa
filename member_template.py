@@ -1,5 +1,5 @@
 from description import description_maker
-from element import element_maker
+from member import member_maker
 from field import field_maker 
 from parse_config import process
 from functools import partial
@@ -9,7 +9,7 @@ import os
 class TemplateLoadingState:
     def __init__(self):
         self._reset_field_data()
-        self.element_doc = []
+        self.member_doc = []
         self.field_makers = [[]] # list of lists, one for each Option.
 
 
@@ -34,7 +34,7 @@ class TemplateLoadingState:
 
 
     def add_doc(self, doc):
-        self.element_doc.extend(doc)
+        self.member_doc.extend(doc)
 
 
     def push_description(self, line_tokens, doc):
@@ -57,7 +57,7 @@ class TemplateLoadingState:
 
     def complete(self):
         self._finish_option()
-        return self.field_makers, self.element_doc
+        return self.field_makers, self.member_doc
 
 
 def throw(line, e):
@@ -68,7 +68,7 @@ def is_option_separator(line_tokens):
     return len(line_tokens) == 1 and all(c == '-' for c in line_tokens[0])
 
 
-def load_template(filename):
+def load(filename):
     state = TemplateLoadingState()
     name = os.path.splitext(os.path.basename(filename))[0]
     with open(filename) as f:
@@ -82,4 +82,4 @@ def load_template(filename):
                 state.push_description(line_tokens, doc)
             else:
                 state.start_field(line_tokens, doc)
-    return element_maker(name, *state.complete())
+    return member_maker(name, *state.complete())

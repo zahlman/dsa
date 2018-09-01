@@ -19,16 +19,13 @@ class Option:
         # Only one Option will be tried for formatting, so raise an exception
         # if validation fails.
         if (full_value & self.fixed_mask) != self.fixed_value:
-            raise ValueError('invalid fixed data for element')
+            raise ValueError('invalid fixed data during formatting')
         # Collect results for each field.
         # TODO: think about how to support other endianness.
-        result = ', '.join(
+        return [
             field.format((full_value >> offset) & ((1 << field.size) - 1))
             for offset, field in zip(self.offsets, self.fields)
-        )
-        if result != ''.join(result.split()): # embedded whitespace
-            result = f'[{result}]'
-        return result
+        ]
 
 
     def parse(self, items):
@@ -41,10 +38,26 @@ class Option:
         )
 
 
-class Element:
+def collect(items):
+    result = ', '.join(items)
+    if result != ''.join(result.split()): # embedded whitespace
+        result = f'[{result}]'
+    return result
+
+
+def itemize(raw):
+    # N.B. Even if there's no whitespace, there could still be multiple params.
+    if raw.startswith('['):
+        assert raw.endswith(']') # should be guaranteed by tokenizer.
+        raw = raw[1:-1]
+    return [x.strip() for x in raw.split(',')]
+
+
+class Member:
     # All constraints to be verified in an external process.
     # Do not call this constructor directly.
-    def __init__(self, name, size, format_option, option_map, doc):
+    def __init__(self, typename, name, size, format_option, option_map, doc):
+        self.typename = typename
         self.name = name
         self.size = size # byte count!
         self.format_option = format_option
@@ -53,22 +66,34 @@ class Element:
 
 
     def __str__(self):
-        return self.name
+        return f'{self.name} of type {self.typename}'
+
+
+    def throw(self, msg):
+        raise ValueError(f'member {self.name}: {msg}')
 
 
     def format(self, value):
-        # Exceptions will be propagated to the Struct level.
-        return self.format_option.format(int.from_bytes(value, 'little'))
+        try:
+            return collect(
+                self.format_option.format(int.from_bytes(value, 'little'))
+            )
+        except ValueError as e:
+            self.throw(e)
 
 
-    def parse(self, items):
+    def parse(self, raw):
+        items = itemize(raw)
         try:
             parser = self.option_map[len(items)]
         except KeyError:
-            raise ValueError(
-                f'Invalid number of parameters for {self.name} type'
+            self.throw(
+                f'Invalid number of parameters for {self.typename} type'
             )
-        return parser.parse(items).to_bytes(self.size, 'little')
+        try:
+            return parser.parse(items).to_bytes(self.size, 'little')
+        except ValueError as e:
+            self.throw(e)
 
 
 def _sorted_option_fields(field_makers, deferred):
@@ -107,12 +132,12 @@ def _option(field_makers, deferred):
     return option_size // 8, Option(*option_data)
 
 
-def _parameterize(name, deferred):
+def _parameterize(typename, deferred):
     parameters = sorted(f'{k}={v}' for k, v in deferred.items())
-    return f"name({', '.join(parameters)})"
+    return f"{typename}({', '.join(parameters)})"
 
 
-def _element(field_maker_groups, name, doc, deferred):
+def _member(field_maker_groups, typename, doc, deferred, name):
     format_option = None
     option_map = {}
     size = None
@@ -122,20 +147,20 @@ def _element(field_maker_groups, name, doc, deferred):
             size = o_size
         elif size != o_size:
             raise ValueError(
-                'options for element must have the same total size'
+                'inconsistent bit size for member'
             )
         if option.arguments in option_map:
             raise ValueError(
-                'options for element must have all different argument counts'
+                'formats for member must have all different argument counts'
             )
         option_map[option.arguments] = option
         if format_option is None:
             format_option = option
     if format_option is None:
-        raise ValueError('no options provided for element')
-    name = _parameterize(name, deferred)
-    return Element(name, size, format_option, option_map, doc)
+        raise ValueError('no formatting options provided for member')
+    typename = _parameterize(typename, deferred)
+    return Member(typename, name, size, format_option, option_map, doc)
 
 
-def element_maker(name, field_makers, doc):
-    return partial(_element, field_makers, name, doc)
+def member_maker(typename, field_makers, doc):
+    return partial(_member, field_makers, typename, doc)
