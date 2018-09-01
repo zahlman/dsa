@@ -47,9 +47,6 @@ def collect(items):
 
 def itemize(raw):
     # N.B. Even if there's no whitespace, there could still be multiple params.
-    if raw.startswith('['):
-        assert raw.endswith(']') # should be guaranteed by tokenizer.
-        raw = raw[1:-1]
     return [x.strip() for x in raw.split(',')]
 
 
