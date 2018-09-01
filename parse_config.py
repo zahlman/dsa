@@ -6,9 +6,13 @@ token = re.compile('(?:\[[^\[\]]*\])|(?:[^ \t\[\]]+)')
 
 
 def tokenize(line):
+    # Also normalizes whitespace within bracketed tokens.
+    # We need to do this to avoid e.g. issues with multi-word identifiers
+    # (like 'foo bar' not matching 'foo\tbar'), which gets that much hairier
+    # with line-wrapping involved.
     return [
         x[1:-1] if x.startswith('[') else x
-        for x in token.findall(line)
+        for x in token.findall(' '.join(line.split()))
     ]
 
 
