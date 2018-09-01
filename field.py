@@ -1,5 +1,4 @@
-from parse_config import parse_base, parse_bool, parse_int
-from parse_config import fill_template, parse_flags
+from arguments import Arguments, base, boolean, integer
 from functools import partial
 
 
@@ -142,8 +141,8 @@ def _parse_nbo(nbo):
     return name.strip(), int(bits, 0), order
 
 
-def _field(name, bits, order, flags, description_makers, doc, deferred):
-    flags = fill_template(flags, deferred)
+def _field(name, bits, order, arguments, description_makers, doc, deferred):
+    flags = arguments.evaluate(deferred)
     fixed, bias, signed = flags['fixed'], flags['bias'], flags['signed']
     if fixed is not None:
         return order, FixedField(
@@ -161,24 +160,22 @@ def _field(name, bits, order, flags, description_makers, doc, deferred):
     )
 
 
-def field_maker(line_tokens, doc, description_makers):
+def field_maker(line_tokens, doc, description_makers, deferral):
     """Creates a factory that will create a Field using deferred info.
     line_tokens -> tokenized line from the config file.
     doc -> associated doc lines.
     description_makers -> factories for contained Descriptions.
+    deferral -> accumulator for parameters that will be deferred.
+
     The factory expects the following parameters:
-    deferred -> a dict of deferred parameters used to customize the Field.
-    In addition to the created Field, the factory will return associated
-    info used for setting up the parent Option properly."""
+    deferred -> a dict of deferred parameters used to customize the Field."""
     nbo, *flag_tokens = line_tokens
     name, bits, order = _parse_nbo(nbo)
-    flags = parse_flags(
-        flag_tokens, 
-        {
-            'bias': (parse_int, 0),
-            'signed': (parse_bool, False),
-            'base': (parse_base, hex),
-            'fixed': (parse_int, None)
-        }
+    arguments = Arguments(
+        {'bias': integer, 'signed': boolean, 'base': base, 'fixed': integer},
+        {'bias': 0, 'signed': False, 'base': hex, 'fixed': None}
     )
-    return partial(_field, name, bits, order, flags, description_makers, doc)
+    arguments.specify(flag_tokens, deferral)
+    return partial(
+        _field, name, bits, order, arguments, description_makers, doc
+    )

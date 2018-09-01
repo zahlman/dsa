@@ -1,3 +1,4 @@
+from arguments import Arguments
 from description import description_maker
 from field import field_maker 
 from member import member_maker
@@ -11,6 +12,7 @@ class TemplateLoadingState:
         self._reset_field_data()
         self.member_doc = []
         self.field_makers = [[]] # list of lists, one for each Option.
+        self.deferral = Arguments({}, {})
 
 
     def _reset_field_data(self):
@@ -21,7 +23,8 @@ class TemplateLoadingState:
 
     def _finish_field(self):
         self.field_makers[-1].append(field_maker(
-            self.field_tokens, self.field_doc, self.description_makers
+            self.field_tokens, self.field_doc,
+            self.description_makers, self.deferral
         ))
         self._reset_field_data()
 
@@ -57,7 +60,7 @@ class TemplateLoadingState:
 
     def complete(self):
         self._finish_option()
-        return self.field_makers, self.member_doc
+        return self.deferral, self.field_makers, self.member_doc
 
 
 def throw(line, e):
@@ -82,7 +85,8 @@ def create(name, lines):
             state.push_description(line_tokens, doc)
         else:
             state.start_field(line_tokens, doc)
-    return member_maker(name, *state.complete())
+    deferral, field_makers, member_doc = state.complete()
+    return member_maker(name, field_makers, member_doc), deferral
 
 
 # While it's true that the underlying file could change between calls, we would
