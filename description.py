@@ -139,7 +139,7 @@ def _normalize_range(items, minimum, maximum):
     count = len(items)
     if count > 2:
         raise ValueError('too many parameters for range description')
-    
+
     if count == 2:
         low, high = items
         low = int(low, 0) if low else minimum
@@ -149,7 +149,7 @@ def _normalize_range(items, minimum, maximum):
                 f"range {low}..{high} can't be represented by this field"
             )
         return low, high
-    
+
     # can't be empty here; if there was a label, it would have been
     # parsed as a flag name, and otherwise the line would be empty.
     assert count == 1

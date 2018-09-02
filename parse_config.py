@@ -1,4 +1,4 @@
-import re
+import re, textwrap
 
 
 token = re.compile('(?:\[[^\[\]]*\])|(?:[^ \t\[\]]+)')
@@ -13,6 +13,38 @@ def tokenize(line):
         x[1:-1] if x.startswith('[') else x
         for x in token.findall(' '.join(line.split()))
     ]
+
+
+def parts_of(token, separator, required, allowed, last_list):
+    parts = [
+        x.strip() if x.strip() else None
+        for x in token.split(separator)
+    ]
+    count = len(parts)
+    if count < required:
+        raise ValueError('not enough parts for multipart token')
+    elif count < allowed:
+        parts.extend([None] * (allowed - count))
+    if last_list: # group up the last token, even if padding occurred.
+        parts = parts[:allowed-1] + [parts[allowed-1:]]
+    elif count > allowed:
+        raise ValueError('too many parts for multipart token')
+    return parts
+
+
+# Used as the final step in producing output when disassembling.
+def format_line(tokens):
+    tokens = [
+        t if t == ''.join(t.split()) else f'[{t}]'
+        for t in tokens
+    ]
+    return textwrap.wrap(
+        ' '.join(tokens), width=78,
+        # Indicate the wrapped lines according to spec.
+        subsequent_indent=' ' * len(tokens[0]) + ' + ',
+        # Ensure that `textwrap` doesn't alter anything important.
+        break_long_words=False, break_on_hyphens=False
+    )
 
 
 def process(lines):
