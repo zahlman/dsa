@@ -88,7 +88,7 @@ class Field:
         self.descriptions = descriptions
         self.doc = doc # Unused for now.
 
-    
+
     @property
     def is_fixed(self):
         return False
@@ -114,8 +114,8 @@ class Field:
                 return result
         # No exceptions, but nothing worked
         self.implementation.throw(f'No valid format for value: {value}')
-    
-    
+
+
     def parse(self, text):
         for description in self.descriptions:
             try:
@@ -173,9 +173,10 @@ def field_maker(line_tokens, doc, description_makers, deferral):
     name, bits, order = _parse_nbo(nbo)
     arguments = Arguments(
         {'bias': integer, 'signed': boolean, 'base': base, 'fixed': integer},
-        {'bias': 0, 'signed': False, 'base': hex, 'fixed': None}
+        {'bias': 0, 'signed': False, 'base': hex, 'fixed': None},
+        flag_tokens
     )
-    arguments.specify(flag_tokens, deferral)
+    arguments.add_requests(deferral)
     return partial(
         _field, name, bits, order, arguments, description_makers, doc
     )

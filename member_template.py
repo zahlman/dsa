@@ -1,6 +1,7 @@
 from arguments import Arguments
 from description import description_maker
-from field import field_maker 
+from field import field_maker
+from arguments import string
 from member import member_maker
 from parse_config import process
 from functools import lru_cache
@@ -12,7 +13,7 @@ class TemplateLoadingState:
         self._reset_field_data()
         self.member_doc = []
         self.field_makers = [[]] # list of lists, one for each Option.
-        self.deferral = Arguments({}, {})
+        self.deferral = {'before': string}
 
 
     def _reset_field_data(self):
