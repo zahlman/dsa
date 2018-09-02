@@ -50,8 +50,8 @@ def format_line(tokens):
 def process(lines):
     position, indent, line, doc = 0, '', '', []
     for i, raw_line in enumerate(lines, 1):
-        if raw_line.startswith('##'):
-            doc.append(raw_line[2:].strip())
+        if raw_line.strip().startswith('##'):
+            doc.append(raw_line.strip()[2:].strip())
             continue
         raw_line, mark, comment = raw_line.partition('#')
         raw_line = raw_line.rstrip()
