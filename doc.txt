@@ -1,11 +1,257 @@
-A Type represents the semantics of a small chunk of data - more or less atomic,
-typically no more than 4 bytes. It logically consists of one or more Options
-for representing the data, each being a way to format the data into a readable
-text string and parse the text back into data. Each Option is logically a
-sequence of Fields, representing sub-ranges of the bits in the data chunk. Each
-Field can either be represented according to one or more Descriptions of the
-underlying field value, or else has a fixed value. The Options for a given Type
-shall each have a different number of Fields in them, all represent the same
-number of bits of data, and have at least one Field each. The data thus
-described shall be a whole number of bytes (non-zero multiple of 8 bits),
-completely described by each Option.
+Overview
+--------
+
+Data Structure Assembler (DSA) is a tool for interpreting and/or modifying
+arbitrary binary data embedded in some source file (such as an executable or
+image file), according to a plain-text schema which describes the format of
+the data. By loading the schema files, DSA constructs a parser which can
+"disassemble" the binary data into a plain-text description and "assemble"
+such a description back into data. (The general approach of DSA could also
+theoretically be extended to work with in-memory data, but this is not
+implemented.)
+
+A DSA schema is specified using two kinds of files: *type description* files,
+which describe the textual format of the more-or-less atomic components of
+the data (typically no more than 4 bytes each, although there is no set
+limit); and *structure group* files, which describe the semantic structure of
+the data. (There is built-in support for "pointer" values, which is to say,
+values which represent some offset in the souce to another piece of data.)
+Disassembling from the source binary produces a *data description* file.
+
+File formatting
+---------------
+
+All file types mentioned above follow some common formatting conventions.
+
+(The descriptions below are admittedly dry and pedantic. If you prefer, feel
+free to skip through the example snippets embedded here, and/or examine the
+fully-worked examples provided with DSA.)
+
+* All files are plain text, and a `.txt` extension is recommended. The
+  encoding should be UTF-8, although this can be overridden at the command
+  line.
+
+* The file is preprocessed to strip comments, extract documentation, join up
+  long lines, and normalize whitespace.
+
+  * Everything on a line from a `#` character onwards is treated as a comment.
+    Notwithstanding this, lines which start with `##` (possibly preceded by
+    whitespace) are treated as documentation. Documentation lines *follow* the
+    line that they are understood to document. (Exception: documentation at
+    the beginning of a file is understood to document the file as a whole.)
+
+  * All within-line whitespace sequences are treated as equivalent to a
+    single space character. Trailing whitespace (after removing comments and
+    documentation) is eliminated. Empty lines (after the above) are ignored.
+
+  * A line with `+` as the first non-whitespace character continues the
+    previous line. (Since trailing whitespace is ignored, to leave a space
+    between the two lines' contents, there must be a space after the `+`.)
+
+* Conceptually, after preprocessing as above, each line is tokenized. (This is
+  actually handled in a single pass.)
+
+  * Leading whitespace on a line is syntactically significant, with some
+    restrictions. Only one level of indentation is recognized, and not in data
+    description files. (The whitespace is not formally represented as a token;
+    DSA simply marks the line as indented.)
+
+  * Tokens may contain whitespace if surrounded by square brackets. Remember,
+    whitespace is normalized; `[foo bar]` and `[foo   bar]` are treated as the
+    same value.
+
+  * Generally, tokens may contain any character except for `<TODO: list>`.
+    In particular, some "multipart" tokens may contain delimiters (such as `:`
+    or `,`) as appropriate. (The individual parts of these tokens may not
+    contain the delimiter characters.) However, the characters `{}@` have
+    special, context-sensitive meaning depending on what kind of file they
+    appear in.
+
+  * Numeric tokens have the semantics of Python's `int` function called with
+    a `base` of `0`: that is, they may be written in decimal, or in binary
+    with a `0b` prefix, or in octal with a `0o` prefix, or in hexadecimal
+    with a `0x` prefix. Depending on the context, however, a token might not
+    be interpreted as a number even though it fits this form.
+
+  * Beware that all of these tokenization rules are suspended within
+    `@compiler {}` blocks in data description files (except the restriction
+    on `{}@` characters). These lines are still subject to whitespace
+    normalization and comment/documentation processing, however.
+
+* To ease discussion, the following documentation will write *`:` token* to
+  mean a multipart token delimited with `:`; similarly for other delimiters.
+
+File correspondence
+-------------------
+
+A structure group file describes multiple "structures", each of which
+basically corresponds to a line of output in the data description. A structure
+aggregates one or more "members", each of which is formatted according to the
+rules in a type description file. Each member will correspond to a `,` token
+in the output line, the parts of which correspond to the component "fields" of
+the member's type. Depending on the type description, these parts may have
+sub-parts delimited by `|`.
+
+Data description files
+----------------------
+
+A data description file consists of *data* lines (discussed above) and *meta*
+lines (used for organization). Line indentation is ignored. Meta lines either
+begin with an `@` symbol, or consist of a single `}`.
+
+In addition to the member tokens, a line in the data description starts with
+a token that identifies the structure. An example data line might therefore
+look like
+
+FOO [1, 2, 3] 4 [bar baz]
+
+Here, the `FOO` structure has three members - the first has three non-fixed
+data fields whose values are explicitly specified; the second is explicitly
+specified as a single number; and the last is specified using a named value
+`bar baz` (the type description determines what numeric value this represents).
+
+The following sorts of meta lines are recognized:
+
+`@label <number> <name>` e.g. `@label 0x100 foo`
+
+This indicates a numeric offset in the source where the following data was
+found (or is to be written). It functions like a combination of an "org"
+statement and a label in ASM. Additionally, data lines may subsequently use
+`@foo` as equal to `0x100` (useful for pointer types; if the block of data is
+relocated, references will be updated automatically).
+
+`@size <number> {` e.g. `@size 4096 {`
+
+This asserts that the following block represents the indicated number of
+bytes of data in the source. This provides a useful sanity check, to avoid
+partially overwriting one chunk of data with another. When assembling, an
+error will result if there is too much data described in the block; if there
+is less data, it will be padded out with zero bytes (this is also useful for
+clearing out sections of binary files).
+
+`@filter <name> {` e.g. `@filter zip {`
+
+This indicates that the following block (until the corresponding `}`) was
+decoded or decompressed from the named format when disassembled, or should be
+encoded or compressed with that format when assembling. (More on this later.)
+
+`@processor <name> {` e.g. @processor gas {`
+
+This indicates that the following block (until the corresponding `}`) should
+be re-preprocessed (?) by the named "processor" when assembling (blocks of
+this sort are not emitted by the disassembler). Here, `gas` might be a
+processor that rewrites opcodes in GNU ASm syntax into descriptions that DSA
+can handle. The block may not contain the characters `{}@`; in particular, it
+may not contain meta labels or nested blocks. (More on this later.)
+
+Type description files
+----------------------
+
+A type description file is structured as a sequence of "options" for
+representing the underlying data, separated by `----` lines. (Any number of `-`
+characters works, as long as that is the only non-whitespace character and
+there is no embedded whitespace. Indentation is ignored.)
+
+These options are described as sequences of "fields", each of which represents
+some number of bits of data. Each option must have a unique number of fields;
+the sum of the fields' sizes must be the same for each option; and this size
+must be a positive multiple of 8 bits (i.e., a whole number of bytes). When
+the data is disassembled, the first of these options will be used; when
+assembling, an option will be chosen according to the number of parts in the
+token provided in the data description file.
+
+A field is described with an unindented line giving the field's size (number
+of bits represented), a name (for diagnostic purposes), optionally a fixed
+expected value, and possibly other options. When a field has a fixed value, it
+is not represented in the corresponding token in a data description file; when
+disassembling, the entire type is not recognized if the data doesn't match,
+and when assembling, the corresponding bits are set automatically.
+
+The size, name and fixed value (if any) are specified in that order by the
+first token of the line, which is a `:` token. For example, a line starting
+with `[4:x coord]` introduces a field with the name `x coord` representing 4
+bits of data; a line starting with `1:true:1` introduces a 1-bit field named
+`true` whose numeric value must equal 1.
+
+The following tokens on the unindented line (if any) specify options, as `:`
+tokens. These options are recognized:
+
+`base:<number>` e.g. `base:2` - indicates the preferred base to use when
+disassembling. Defaults to 16 (hexadecimal).
+
+`bias:<number>` e.g. `bias:0x10000` - see below. Defaults to 0. Named ranges
+are not allowed for this field.
+
+`flags:<sequence of names>` e.g. `[flags:foo:bar:foo bar:spam]` - when this
+option is specified, the field is represented as a set of boolean flags,
+joined up with `|` symbols. For example, with the above flags, a value of 11
+in the source would be represented as `foo | bar | spam` (as part of a larger
+`,` token enclosed in `[]`, of course). Incompatible with all other options.
+
+`signed:<boolean>` e.g. `signed` - indicates that the raw bits should be
+interpreted as a signed, twos-complement value. Defaults to false (the bits
+are interpreted as an unsigned integer). Note that the boolean value can be
+explicitly provided, but `signed` by itself denotes a signed value, and the
+absence of a `signed` option denotes an unsigned value.
+
+`stride:<number>` e.g. `stride:28` - see below. Defaults to 1. Named ranges
+are not allowed for this field.
+
+In addition to directly specifying values for these flags, the type
+description may *parameterize* them by providing a name enclosed in `{}`. In
+this case, the value is filled in from the corresponding argument in a
+structure group file (more on this later).
+
+`bias` and `stride` options are useful for converting index values into
+offsets, or memory-mapped pointers baked into the data into file offsets. When
+disassembling, the raw value is multiplied by the `stride` and then the `bias`
+is added, to produce the number that will actually appear in the output. When
+assembling, this process is reversed (if the raw value minus `bias` is not
+divisible by `stride`, an error occurs).
+
+Fields may be formatted either as *enumerations* or as *flags*. Flags are
+specified using a `flags` option, as described above. When there is no `flags`
+option, the enumeration values are provided with one or more following lines,
+which are indented and describe possibly-labelled ranges of values. Each of
+these lines has a single `:` token specifying a minimum value, a maximum value
+and optionally a name. A blank minimum value is interpreted as the smallest
+value representable by the raw data; similarly for a blank maximum.
+
+Labelled ranges containing a single value are represented just using the
+label name; if there is more than one value in the range, it is formatted as
+the name followed by an offset in parentheses.
+
+For example, a line like `:` simply means that any value is acceptable and
+will not be named; a line like `3:7:foo` means that values from 3 to 7
+*inclusive* will be represented as `foo(0)` (for 3) up to `foo(4)` (for 7);
+a line like `5:5:bar` means that a value of 5 will be represented as `bar`.
+
+The disassembler checks each provided range in order until it finds one that
+contains the value from the source data, and formats accordingly. (If no range
+is found, the type - and thus the entire structure containing it - is not
+recognized at this point in the data.) If a nonzero `bias` and/or a `stride`
+other than 1 is provided, the raw value from the source data is compared to
+the ranges, and then adjusted as part of formatting. In this case, the ranges
+must all be unnamed.
+
+Similarly, the assembler checks each range description in turn to see if the
+provided text can be interpreted as a value in that range. If a match is
+found, the corresponding raw value is used to construct the assembled bytes.
+When non-default values are used for `bias` and/or `stride`, the value is
+adjusted before being compared to the ranges. (A label name will also be
+resolved into the corresponding numeric value first.)
+
+Structure group files
+---------------------
+
+TODO
+
+Filters and Processors
+----------------------
+
+TODO
+
+Parameterized types
+-------------------
+
+TODO
