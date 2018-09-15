@@ -1,4 +1,5 @@
 from arguments import Arguments, base, boolean, integer
+from parse_config import parts_of
 from functools import partial
 
 
@@ -128,32 +129,19 @@ class Field:
         self.implementation.throw(f"Couldn't parse: '{text}'")
 
 
-def _parse_nbo(nbo):
-    items = [x.strip() for x in nbo.split(':')]
-    if len(items) == 2:
-        name, bits = items
-        order = None
-    elif len(items) == 3:
-        name, bits, order = items
-        order = int(order, 0)
-    else:
-        raise ValueError(f'invalid name/bits/order specification')
-    return name.strip(), int(bits, 0), order
-
-
-def _field(name, bits, order, arguments, description_makers, doc, deferred):
+def _field(bits, name, fixed, arguments, description_makers, doc, deferred):
     flags = arguments.evaluate(deferred)
-    fixed, bias, signed = flags['fixed'], flags['bias'], flags['signed']
+    bias, signed, base = flags['bias'], flags['signed'], flags['base']
     if fixed is not None:
-        return order, FixedField(
+        return FixedField(
             name, bits, bias, signed, fixed, doc
         )
 
     raw = RawField(name, bits, bias, signed)
-    return order, Field(
+    return Field(
         raw,
         [
-            d(raw.minimum, raw.maximum, bits, flags['base'])
+            d(raw.minimum, raw.maximum, bits, base)
             for d in description_makers
         ],
         doc
@@ -169,14 +157,17 @@ def field_maker(line_tokens, doc, description_makers, deferral):
 
     The factory expects the following parameters:
     deferred -> a dict of deferred parameters used to customize the Field."""
-    nbo, *flag_tokens = line_tokens
-    name, bits, order = _parse_nbo(nbo)
+    bnf, *flag_tokens = line_tokens
+    bits, name, fixed = parts_of(bnf, ':', 1, 3, False)
+    bits = int(bits, 0)
+    if fixed is not None:
+        fixed = int(fixed, 0)
     arguments = Arguments(
-        {'bias': integer, 'signed': boolean, 'base': base, 'fixed': integer},
-        {'bias': 0, 'signed': False, 'base': hex, 'fixed': None},
+        {'bias': integer, 'signed': boolean, 'base': base},
+        {'bias': 0, 'signed': False, 'base': hex},
         flag_tokens
     )
     arguments.add_requests(deferral)
     return partial(
-        _field, name, bits, order, arguments, description_makers, doc
+        _field, bits, name, fixed, arguments, description_makers, doc
     )

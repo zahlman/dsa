@@ -95,14 +95,8 @@ class Member:
 
 def _sorted_option_fields(field_makers, deferred):
     # No doc is associated at the Option level.
-    raw_fields = []
-    for f in field_makers:
-        order, field = f(deferred)
-        if order is None:
-            raw_fields.append(field)
-        else:
-            raw_fields.insert(order, field)
-    return raw_fields
+    # TODO: implement custom ordering.
+    return [f(deferred) for f in field_makers]
 
 
 def _prepared_option_fields(raw_fields):

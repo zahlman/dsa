@@ -13,7 +13,7 @@ class TemplateLoadingState:
         self._reset_field_data()
         self.member_doc = []
         self.field_makers = [[]] # list of lists, one for each Option.
-        self.deferral = {'before': string}
+        self.deferral = {}
 
 
     def _reset_field_data(self):

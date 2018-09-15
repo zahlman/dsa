@@ -112,8 +112,6 @@ class Arguments:
         if not item.endswith('>'):
             raise ValueError(f"invalid flag format for argument '{name}'")
         parameter, equals, default = item[1:-1].partition('=')
-        if parameter == 'before':
-            raise ValueError(f"parameter name 'before' is reserved")
         if equals: # Override original default, if any.
             self.known[name] = default
         self.deferred[name] = parameter
