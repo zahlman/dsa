@@ -63,22 +63,9 @@ class Struct:
         # when a copy is made by `parse`.
         self.template = _struct_template(member_data)
         self.offsets = tuple(_struct_offsets(member_data))
-        # Initially, the `followers` are either `None` or a set of string
-        # names of other Structs; after graph resolution, it becomes a
-        # StructGroup instance.
+        # Either `None` or a set of string names of other Structs.
         self._followers = followers
         self.doc = doc # Unused for now.
-
-
-    def resolve_graph(self, cached_groups, main_group):
-        key = self._followers
-        if key is None:
-            assert key in cached_groups
-        else:
-            key = frozenset(key)
-            if key not in cached_groups:
-                cached_groups[key] = main_group.subgroup(key)
-        self._followers = cached_groups[key]
 
 
     def format_from(self, source, position):
@@ -110,52 +97,48 @@ class StructGroup:
         self.doc = doc # Unused for now.
 
 
-    def resolve_graph(self):
-        cache = {None: self}
-        for name, struct in self.structs.items():
-            struct.resolve_graph(cache, self)
-
-
-    def subgroup(self, names):
-        return StructGroup(
-            OrderedDict((k, v) for k, v in self.structs.items() if k in names),
-            self.align, self.endian, self.doc
-        )
-
-
-    def nonterminal(self):
-        return bool(self.structs)
-
-
-    def format_from(self, source, position):
-        for name, struct in self.structs.items():
+    def format_from(self, candidates, source, position):
+        for name in candidates:
+            struct = self.structs[name]
             result = struct.format_from(source, position)
             if result is not None:
-                tokens, size, group = result
-                return ' '.join((name,) + tokens), size, group
+                tokens, size, followers = result
+                return ' '.join((name,) + tokens), size, followers
         raise ValueError(f'incorrectly formatted data at {position:X}')
 
 
-    def parse(self, tokens):
+    @property
+    def all_structs(self):
+        return set(self.structs.keys())
+
+
+    def format_chunk(self, source, position, count=-1):
+        candidates = self.all_structs
+        while count != 0 and position < len(source) and candidates:
+            result, size, candidates = self.format_from(candidates, source, position)
+            if candidates is None: # no candidates -> empty set.
+                candidates = self.all_structs
+            assert candidates <= self.all_structs
+            position += size
+            yield result
+            count -= 1
+        if count > 0:
+            raise ValueError(f'premature end of chunk; {count} structs missing')
+        if candidates and count < 0:
+            # when count == 0, we may not have reached a terminator, but that's
+            # explicitly OK since the point is that the count determines the
+            # chunk boundary.
+            assert position == len(source)
+            raise ValueError("premature end of data; didn't reach terminator struct")
+
+
+    def parse(self, tokens, followers):
         # Name extraction can't fail, since empty lines are skipped.
         name, *tokens = tokens
-        try:
-            struct = self.structs[name]
-        except KeyError:
+        if name not in followers:
             raise ValueError(' '.join((
                 f'struct `{name}` invalid or unrecognized at this point',
-                f'(valid options: {sorted(self.structs.keys())})'
+                f'(valid options: {followers})'
             )))
-        return struct.parse(tokens)
-
-
-def format_chunk(group, source, position, count=None):
-    while group.nonterminal():
-        result, size, group = group.format_from(source, position)
-        position += size
-        yield result
-        if count is None:
-            continue
-        count -= 1
-        if count == 0:
-            break
+        # `followers` should be a subset of struct keys.
+        return self.structs[name].parse(tokens)
