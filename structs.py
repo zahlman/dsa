@@ -1,5 +1,6 @@
 from arguments import parameters
 from parse_config import parts_of
+from collections import OrderedDict
 import member_template
 import re
 
@@ -47,7 +48,7 @@ def _struct_offsets(member_data):
 
 
 class Struct:
-    def __init__(self, member_data, doc):
+    def __init__(self, member_data, followers, doc):
         assert all(
             (fixed is None) or (len(fixed) == member.size)
             for member, fixed in member_data
@@ -62,7 +63,22 @@ class Struct:
         # when a copy is made by `parse`.
         self.template = _struct_template(member_data)
         self.offsets = tuple(_struct_offsets(member_data))
+        # Initially, the `followers` are either `None` or a set of string
+        # names of other Structs; after graph resolution, it becomes a
+        # StructGroup instance.
+        self._followers = followers
         self.doc = doc # Unused for now.
+
+
+    def resolve_graph(self, cached_groups, main_group):
+        key = self._followers
+        if key is None:
+            assert key in cached_groups
+        else:
+            key = frozenset(key)
+            if key not in cached_groups:
+                cached_groups[key] = main_group.subgroup(key)
+        self._followers = cached_groups[key]
 
 
     def format_from(self, source, position):
@@ -73,7 +89,7 @@ class Struct:
         return tuple(
             member.format(value)
             for member, value in zip(self.members, match.groups())
-        )
+        ), len(self.template), self._followers
 
 
     def parse(self, tokens):
@@ -83,4 +99,58 @@ class Struct:
             raw = member.parse(token)
             assert len(raw) == member.size
             self.template[offset:offset+len(raw)] = raw
-        return bytes(self.template)
+        return bytes(self.template), self._followers
+
+
+class StructGroup:
+    def __init__(self, structs, align, endian, doc):
+        self.structs = structs # OrderedDict. TODO: optimized dispatch
+        self.align = align
+        self.endian = endian # TODO: implement big-endian
+        self.doc = doc # Unused for now.
+
+
+    def resolve_graph(self):
+        cache = {None: self}
+        for name, struct in self.structs.items():
+            struct.resolve_graph(cache, self)
+
+
+    def subgroup(self, names):
+        return StructGroup(
+            OrderedDict((k, v) for k, v in self.structs.items() if k in names),
+            self.align, self.endian, self.doc
+        )
+
+
+    def nonterminal(self):
+        return bool(self.structs)
+
+
+    def format_from(self, source, position):
+        for name, struct in self.structs.items():
+            result = struct.format_from(source, position)
+            if result is not None:
+                tokens, size, group = result
+                return ' '.join((name,) + tokens), size, group
+        raise ValueError(f'incorrectly formatted data at {position:X}')
+
+
+    def parse(self, tokens):
+        # Name extraction can't fail, since empty lines are skipped.
+        name, *tokens = tokens
+        try:
+            struct = self.structs[name]
+        except KeyError:
+            raise ValueError(' '.join((
+                f'struct `{name}` invalid or unrecognized at this point',
+                f'(valid options: {sorted(self.structs.keys())})'
+            )))
+        return struct.parse(tokens)
+
+
+def format_chunk(group, source, position):
+    while group.nonterminal():
+        result, size, group = group.format_from(source, position)
+        position += size
+        yield result
