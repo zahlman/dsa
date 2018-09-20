@@ -149,8 +149,13 @@ class StructGroup:
         return struct.parse(tokens)
 
 
-def format_chunk(group, source, position):
+def format_chunk(group, source, position, count=None):
     while group.nonterminal():
         result, size, group = group.format_from(source, position)
         position += size
         yield result
+        if count is None:
+            continue
+        count -= 1
+        if count == 0:
+            break
