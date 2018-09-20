@@ -90,10 +90,11 @@ class Struct:
 
 
 class StructGroup:
-    def __init__(self, structs, align, endian, doc):
+    def __init__(self, structs, doc, align=4, endian='little', size=None):
         self.structs = structs # OrderedDict. TODO: optimized dispatch
         self.align = align
         self.endian = endian # TODO: implement big-endian
+        self.size = size
         self.doc = doc # Unused for now.
 
 
@@ -112,10 +113,13 @@ class StructGroup:
         return set(self.structs.keys())
 
 
-    def format_chunk(self, source, position, count=-1):
+    def format_chunk(self, source, position):
         candidates = self.all_structs
+        count = -1 if self.size is None else self.size
         while count != 0 and position < len(source) and candidates:
-            result, size, candidates = self.format_from(candidates, source, position)
+            result, size, candidates = self.format_from(
+                candidates, source, position
+            )
             if candidates is None: # no candidates -> empty set.
                 candidates = self.all_structs
             assert candidates <= self.all_structs
@@ -123,13 +127,17 @@ class StructGroup:
             yield result
             count -= 1
         if count > 0:
-            raise ValueError(f'premature end of chunk; {count} structs missing')
+            raise ValueError(
+                f'premature end of chunk; {count} struct(s) missing'
+            )
         if candidates and count < 0:
             # when count == 0, we may not have reached a terminator, but that's
             # explicitly OK since the point is that the count determines the
             # chunk boundary.
             assert position == len(source)
-            raise ValueError("premature end of data; didn't reach terminator struct")
+            raise ValueError(
+                "premature end of data; didn't reach terminator struct"
+            )
 
 
     def parse(self, tokens, followers):
