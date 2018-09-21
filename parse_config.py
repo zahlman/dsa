@@ -93,5 +93,3 @@ def load(state_machine_type, folder, name):
 
 def cached_loader(state_machine_type, folder='.'):
     return lru_cache(None)(partial(load, state_machine_type, folder))
-
-

@@ -59,13 +59,6 @@ class TypeDescriptionLSM:
         self.field_makers.append([])
 
 
-    def result(self, name):
-        self._finish_option()
-        return member_maker(
-            name, self.field_makers, self.member_doc
-        ), self.deferral
-
-
     def add_line(self, position, indent, line_tokens, doc):
         if position == 0:
             self.add_doc(doc)
@@ -76,6 +69,13 @@ class TypeDescriptionLSM:
             self.push_description(line_tokens, doc)
         else:
             self.start_field(line_tokens, doc)
+
+
+    def result(self, name):
+        self._finish_option()
+        return member_maker(
+            name, self.field_makers, self.member_doc
+        ), self.deferral
 
 
 load = cached_loader(TypeDescriptionLSM)
