@@ -1,7 +1,10 @@
-from arguments import parameters
-from parse_config import parts_of
-from collections import OrderedDict
+from arguments import boolean, parameters, positive_integer, one_of
 import member_template
+from parse_config import parts_of, process
+
+from collections import OrderedDict
+from functools import lru_cache
+from os.path import basename, splitext
 import re
 
 
@@ -150,3 +153,64 @@ class StructGroup:
             )))
         # `followers` should be a subset of struct keys.
         return self.structs[name].parse(tokens)
+
+
+def parse_options(line_tokens):
+    return parameters({
+        'align': positive_integer,
+        'endian': one_of('big', 'little'),
+        'size': positive_integer
+    }, line_tokens)
+
+
+def parse_struct_header(line_tokens):
+    name, *flag_tokens = line_tokens # TODO: support for aliases
+    options = parameters({'next': set, 'last': boolean}, flag_tokens)
+    if 'next' in options and 'last' in options:
+        raise ValueError('`next` and `last` options are mutually exclusive')
+    if 'last' in options:
+        return name, set()
+    if 'next' in options:
+        return name, options['next']
+    return name, None # no restrictions; full list filled in later.
+
+
+def make_struct_group(name, lines):
+    group_doc = []
+    structs = OrderedDict()
+    options = None
+    name = None
+    struct_doc = []
+    followers = None
+    member_data = []
+    for position, indent, line_tokens, doc in process(lines):
+        if position == 0:
+            group_doc.append(doc)
+        elif indent: # middle of a struct definition.
+            struct_doc.append(doc)
+            member_data.append(instantiate_member(line_tokens))
+        elif options is None: # header
+            options = parse_options(line_tokens)
+        # If we get here: beginning of a new struct.
+        else:
+            if name is not None: # clean up the old one first 
+                structs[name] = Struct(member_data, followers, struct_doc)
+                member_data = []
+                struct_doc = []
+            name, followers = parse_struct_header(line_tokens)
+            if name in structs:
+                raise ValueError(f'duplicate struct definition for {name}')
+    # Finish up last struct and make the group.
+    if options is None:
+        raise ValueError('empty struct group definition (no option line)')
+    if name is None:
+        raise ValueError('empty struct group definition (no structs)')
+    structs[name] = Struct(member_data, followers, struct_doc)
+    return StructGroup(structs, group_doc, **options)
+
+
+@lru_cache(None)
+def load(filename):
+    name = splitext(basename(filename))[0]
+    with open(filename) as f:
+        return make_struct_group(name, f)
