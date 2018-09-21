@@ -1,16 +1,38 @@
 from collections import namedtuple
+from functools import partial
 
 
 # "types" for flag values.
-def string(text):
-    return text
+def string(items):
+    if len(items) > 1:
+        raise ValueError(f'invalid flag format')
+    return items[0]
 
 
-def integer(text):
-    return int(text, 0)
+def integer(items):
+    return int(string(items), 0)
 
 
-def boolean(text):
+def whitelisted_string(whitelist, items):
+    result = string(items)
+    if result not in whitelist:
+        raise ValueError(f'value must be one of {whitelist}')
+    return result
+
+
+def one_of(*values):
+    return partial(whitelisted_string, values)
+
+
+def positive_integer(items):
+    result = integer(items)
+    if result < 1:
+        raise ValueError(f'value cannot be negative or zero')
+    return result
+
+
+def boolean(items):
+    text = string(items)
     if text.lower() == 'true':
         return True
     if text.lower() == 'false':
@@ -18,7 +40,8 @@ def boolean(text):
     return bool(int(text, 0))
 
 
-def base(text):
+def base(items):
+    text = string(items)
     try:
         return {'2': bin, '8': oct, '10': str, '16': hex}[text]
     except KeyError:
@@ -29,11 +52,9 @@ def base(text):
 
 def normalize_flag(token):
     name, *items = [x.strip() for x in token.split(':')]
-    if len(items) > 1:
-        raise ValueError(f"invalid flag format for flag '{name}'")
     if not items: # Shortcut for boolean flags.
-        return name, 'True'
-    return name, items[0]
+        return name, ['True']
+    return name, items
 
 
 def set_unique(d, key, value, msg):
@@ -96,16 +117,22 @@ class Arguments:
     def _parse_flags(self, tokens):
         specified = set()
         for token in tokens:
-            name, item = normalize_flag(token)
+            name, items = normalize_flag(token)
             if name in specified:
                 raise ValueError(
                     f"duplicate specification of argument '{name}'"
                 )
+            assert items
+            if len(items) > 1:
+                raise ValueError(
+                    f"argument '{name}' can't be multiple-valued"
+                )
             specified.add(name)
+            item = items[0]
             if item.startswith('<'):
                 self._add_parameter(name, item)
             else:
-                self.known[name] = self.types[name](item)
+                self.known[name] = self.types[name](items)
 
 
     def _add_parameter(self, name, item):
