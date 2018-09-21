@@ -1,7 +1,6 @@
 from arguments import boolean, parameters, positive_integer, one_of
-import member_template
+import type_loader
 from parse_config import parts_of, process
-
 from collections import OrderedDict
 from functools import lru_cache
 from os.path import basename, splitext
@@ -11,7 +10,7 @@ import re
 def instantiate_member(line_tokens):
     tnf, *options = line_tokens
     typename, name, fixed = parts_of(tnf, ':', 1, 3, False)
-    member_maker, whitelist = member_template.load(typename)
+    member_maker, whitelist = type_loader.load(typename)
     member = member_maker(parameters(whitelist, options), name)
     if fixed is not None:
         fixed = member.parse(fixed)
@@ -192,7 +191,7 @@ def make_struct_group(name, lines):
             options = parse_options(line_tokens)
         # If we get here: beginning of a new struct.
         else:
-            if name is not None: # clean up the old one first 
+            if name is not None: # clean up the old one first
                 structs[name] = Struct(member_data, followers, struct_doc)
                 member_data = []
                 struct_doc = []
