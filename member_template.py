@@ -1,14 +1,14 @@
-from arguments import Arguments
 from description import description_maker
 from field import field_maker
-from arguments import string
 from member import member_maker
-from parse_config import process
-from functools import lru_cache
-from os.path import basename, splitext
+from parse_config import cached_loader
 
 
-class TemplateLoadingState:
+def is_option_separator(line_tokens):
+    return len(line_tokens) == 1 and all(c == '-' for c in line_tokens[0])
+
+
+class TypeDescriptionLSM:
     def __init__(self):
         self._reset_field_data()
         self.member_doc = []
@@ -59,42 +59,23 @@ class TemplateLoadingState:
         self.field_makers.append([])
 
 
-    def complete(self):
+    def result(self, name):
         self._finish_option()
-        return self.deferral, self.field_makers, self.member_doc
+        return member_maker(
+            name, self.field_makers, self.member_doc
+        ), self.deferral
 
 
-def throw(line, e):
-    raise ValueError('Line {line}: {e}')
-
-
-def is_option_separator(line_tokens):
-    return len(line_tokens) == 1 and all(c == '-' for c in line_tokens[0])
-
-
-# Separating this out is better for testing purposes, as we can create a
-# temporary template from a list of strings without file I/O.
-def create(name, lines):
-    state = TemplateLoadingState()
-    for position, indent, line_tokens, doc in process(lines):
+    def add_line(self, position, indent, line_tokens, doc):
         if position == 0:
-            state.add_doc(doc)
+            self.add_doc(doc)
         elif is_option_separator(line_tokens):
-            state.add_doc(doc)
-            state.next_option()
+            self.add_doc(doc)
+            self.next_option()
         elif indent:
-            state.push_description(line_tokens, doc)
+            self.push_description(line_tokens, doc)
         else:
-            state.start_field(line_tokens, doc)
-    deferral, field_makers, member_doc = state.complete()
-    return member_maker(name, field_makers, member_doc), deferral
+            self.start_field(line_tokens, doc)
 
 
-# While it's true that the underlying file could change between calls, we would
-# actually prefer to ignore such changes. This ensures a consistent definition
-# for Members declared with the same type.
-@lru_cache(None)
-def load(filename):
-    name = splitext(basename(filename))[0]
-    with open(filename) as f:
-        return create(name, f)
+load = cached_loader(TypeDescriptionLSM)

@@ -11,8 +11,7 @@ import re
 def instantiate_member(line_tokens):
     tnf, *options = line_tokens
     typename, name, fixed = parts_of(tnf, ':', 1, 3, False)
-    filename = f'{typename}.txt' # For now.
-    member_maker, whitelist = member_template.load(filename)
+    member_maker, whitelist = member_template.load(typename)
     member = member_maker(parameters(whitelist, options), name)
     if fixed is not None:
         fixed = member.parse(fixed)
