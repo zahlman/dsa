@@ -19,7 +19,8 @@ def parse_options(line_tokens):
     return parameters({
         'align': positive_integer,
         'endian': one_of('big', 'little'),
-        'size': positive_integer
+        'size': positive_integer,
+        'first': set
     }, line_tokens)
 
 
@@ -43,8 +44,10 @@ class StructData:
 
 
     def create(self):
-        return self.name, Struct(
-            self.member_data, self.followers, self.struct_doc
+        return (
+            self.name,
+            Struct(self.member_data, self.struct_doc),
+            self.followers
         )
 
 
@@ -59,15 +62,17 @@ class StructGroupDescriptionLSM:
         self.structs = OrderedDict()
         self.options = None
         self.struct_data = None
+        self.graph = {}
 
 
     def _push_old_struct(self):
         if self.struct_data is None:
             return
-        name, struct = self.struct_data.create()
+        name, struct, followers = self.struct_data.create()
         if name in self.structs:
             raise ValueError(f'duplicate struct definition for {name}')
         self.structs[name] = struct
+        self.graph[name] = followers
         self.struct_data = None
 
 
@@ -89,12 +94,14 @@ class StructGroupDescriptionLSM:
 
 
     def result(self, name):
-        self._push_old_struct()
         if self.options is None:
             raise ValueError('empty struct group definition (no option line)')
+        self._push_old_struct()
         if not self.structs:
             raise ValueError('empty struct group definition (no structs)')
-        return StructGroup(self.structs, self.group_doc, **self.options)
+        return StructGroup(
+            self.structs, self.group_doc, self.graph, **self.options
+        )
 
 
 load = cached_loader(StructGroupDescriptionLSM)

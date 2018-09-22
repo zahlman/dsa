@@ -33,7 +33,7 @@ def _struct_offsets(member_data):
 
 
 class Struct:
-    def __init__(self, member_data, followers, doc):
+    def __init__(self, member_data, doc):
         assert all(
             (fixed is None) or (len(fixed) == member.size)
             for member, fixed in member_data
@@ -48,8 +48,6 @@ class Struct:
         # when a copy is made by `parse`.
         self.template = _struct_template(member_data)
         self.offsets = tuple(_struct_offsets(member_data))
-        # Either `None` or a set of string names of other Structs.
-        self._followers = followers
         self.doc = doc # Unused for now.
 
 
@@ -61,7 +59,7 @@ class Struct:
         return tuple(
             member.format(value)
             for member, value in zip(self.members, match.groups())
-        ), len(self.template), self._followers
+        ), len(self.template)
 
 
     def parse(self, tokens):
@@ -71,16 +69,37 @@ class Struct:
             raw = member.parse(token)
             assert len(raw) == member.size
             self.template[offset:offset+len(raw)] = raw
-        return bytes(self.template), self._followers
+        return bytes(self.template)
+
+
+def _normalized_graph(graph, first):
+    all_nodes = set(graph.keys())
+    result = {}
+    for current, followers in graph.items():
+        if followers is None:
+            result[current] = all_nodes
+            continue
+        extra = followers - all_nodes
+        if extra:
+            raise ValueError(
+                f'unrecognized followers `{extra}` for struct `{current}`'
+            )
+        result[current] = followers
+    result[None] = all_nodes if first is None else first
+    return result
 
 
 class StructGroup:
-    def __init__(self, structs, doc, align=4, endian='little', size=None):
+    def __init__(
+        self, structs, doc, graph,
+        first=None, align=4, endian='little', size=None
+    ):
         self.structs = structs # OrderedDict. TODO: optimized dispatch
         self.align = align
         self.endian = endian # TODO: implement big-endian
         self.size = size
         self.doc = doc # Unused for now.
+        self.graph = _normalized_graph(graph, first)
 
 
     def format_from(self, candidates, source, position):
@@ -88,26 +107,19 @@ class StructGroup:
             struct = self.structs[name]
             result = struct.format_from(source, position)
             if result is not None:
-                tokens, size, followers = result
-                return ' '.join((name,) + tokens), size, followers
+                tokens, size = result
+                return ' '.join((name,) + tokens), size, name
         raise ValueError(f'incorrectly formatted data at {position:X}')
 
 
-    @property
-    def all_structs(self):
-        return set(self.structs.keys())
-
-
     def format_chunk(self, source, position):
-        candidates = self.all_structs
+        candidates = self.graph[None]
         count = -1 if self.size is None else self.size
         while count != 0 and position < len(source) and candidates:
-            result, size, candidates = self.format_from(
+            result, size, used = self.format_from(
                 candidates, source, position
             )
-            if candidates is None: # no candidates -> empty set.
-                candidates = self.all_structs
-            assert candidates <= self.all_structs
+            candidates = self.graph[used]
             position += size
             yield result
             count -= 1
@@ -125,7 +137,8 @@ class StructGroup:
             )
 
 
-    def parse(self, tokens, followers):
+    def parse(self, tokens, previous=None):
+        followers = self.graph[previous]
         # Name extraction can't fail, since empty lines are skipped.
         name, *tokens = tokens
         if name not in followers:
@@ -133,5 +146,4 @@ class StructGroup:
                 f'struct `{name}` invalid or unrecognized at this point',
                 f'(valid options: {followers})'
             )))
-        # `followers` should be a subset of struct keys.
         return self.structs[name].parse(tokens)
