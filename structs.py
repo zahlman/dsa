@@ -94,7 +94,7 @@ class StructGroup:
         self, structs, doc, graph,
         first=None, align=4, endian='little', size=None
     ):
-        self.structs = structs # OrderedDict. TODO: optimized dispatch
+        self.structs = structs # TODO: optimized dispatch
         self.align = align
         self.endian = endian # TODO: implement big-endian
         self.size = size

@@ -2,7 +2,6 @@ from arguments import boolean, parameters, positive_integer, one_of
 from parse_config import cached_loader, parts_of, process
 from structs import Struct, StructGroup
 import type_loader
-from collections import OrderedDict
 
 
 def instantiate_member(line_tokens):
@@ -59,7 +58,7 @@ class StructData:
 class StructGroupDescriptionLSM:
     def __init__(self):
         self.group_doc = []
-        self.structs = OrderedDict()
+        self.structs = {}
         self.options = None
         self.struct_data = None
         self.graph = {}
