@@ -1,17 +1,6 @@
 from arguments import boolean, parameters, positive_integer, one_of
 from parse_config import cached_loader, parts_of, process
 from structs import Struct, StructGroup
-import type_loader
-
-
-def instantiate_member(line_tokens):
-    tnf, *options = line_tokens
-    typename, name, fixed = parts_of(tnf, ':', 1, 3, False)
-    member_maker, whitelist = type_loader.load(typename)
-    member = member_maker(parameters(whitelist, options), name)
-    if fixed is not None:
-        fixed = member.parse(fixed)
-    return member, fixed
 
 
 def parse_options(line_tokens):
@@ -50,18 +39,25 @@ class StructData:
         )
 
 
-    def add_member(self, line_tokens, doc):
+    def add_member(self, line_tokens, doc, load_type):
         self.struct_doc.append(doc)
-        self.member_data.append(instantiate_member(line_tokens))
+        tnf, *options = line_tokens
+        typename, name, fixed = parts_of(tnf, ':', 1, 3, False)
+        member_maker, whitelist = load_type(typename)
+        member = member_maker(parameters(whitelist, options), name)
+        if fixed is not None:
+            fixed = member.parse(fixed)
+        self.member_data.append((member, fixed))
 
 
 class StructGroupDescriptionLSM:
-    def __init__(self):
+    def __init__(self, load_type):
         self.group_doc = []
         self.structs = {}
         self.options = None
         self.struct_data = None
         self.graph = {}
+        self.load_type = load_type
 
 
     def _push_old_struct(self):
@@ -82,7 +78,7 @@ class StructGroupDescriptionLSM:
         if indent: # middle of a struct definition
             if self.struct_data is None:
                 raise ValueError('member definition outside of struct')
-            self.struct_data.add_member(line_tokens, doc)
+            self.struct_data.add_member(line_tokens, doc, self.load_type)
             return
         if self.options is None: # header
             self.options = parse_options(line_tokens)
@@ -101,6 +97,3 @@ class StructGroupDescriptionLSM:
         return StructGroup(
             self.structs, self.group_doc, self.graph, **self.options
         )
-
-
-load = cached_loader(StructGroupDescriptionLSM)

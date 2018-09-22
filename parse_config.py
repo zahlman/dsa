@@ -73,8 +73,7 @@ def process(lines):
 # Wrappers for the process of loading a file.
 # Separating this out is better for testing purposes, as we can create a
 # temporary template from a list of strings without file I/O.
-def create(state_machine_type, name, lines):
-    machine = state_machine_type()
+def create(machine, name, lines):
     for position, indent, line_tokens, doc in process(lines):
         try:
             machine.add_line(position, indent, line_tokens, doc)
@@ -83,13 +82,19 @@ def create(state_machine_type, name, lines):
     return machine.result(name)
 
 
+def load(new_state_machine, paths, name):
+    for folder in paths:
+        try:
+            filename = os.path.join(folder, f'{name}.txt')
+            with open(filename) as f:
+                return create(new_state_machine(), name, f)
+        except FileNotFoundError:
+            continue
+    else:
+        raise FileNotFoundError(f'{name}.txt not found in any path')
+
+
 # While it's true that the underlying file could change between calls, we would
 # actually prefer to ignore such changes.
-def load(state_machine_type, folder, name):
-    filename = os.path.join(folder, f'{name}.txt')
-    with open(filename) as f:
-        return create(state_machine_type, name, f)
-
-
-def cached_loader(state_machine_type, folder='.'):
-    return lru_cache(None)(partial(load, state_machine_type, folder))
+def cached_loader(new_state_machine, paths):
+    return lru_cache(None)(partial(load, new_state_machine, paths))

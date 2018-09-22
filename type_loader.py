@@ -76,6 +76,3 @@ class TypeDescriptionLSM:
         return member_maker(
             name, self.field_makers, self.member_doc
         ), self.deferral
-
-
-load = cached_loader(TypeDescriptionLSM)
