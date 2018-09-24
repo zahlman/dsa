@@ -51,13 +51,13 @@ class Struct:
         self.doc = doc # Unused for now.
 
 
-    def format_from(self, source, position):
+    def format_from(self, source, position, disassembler):
         match = self.pattern.match(source, position)
         if match is None:
             # This struct wasn't matched, but maybe another one will be.
             return None
         return tuple(
-            member.format(value)
+            member.format(value, disassembler)
             for member, value in zip(self.members, match.groups())
         ), len(self.template)
 
@@ -102,7 +102,7 @@ class StructGroup:
         self.graph = _normalized_graph(graph, first)
 
 
-    def format_from(self, source, position, previous, count=0):
+    def format_from(self, source, position, previous, count, disassembler):
         if count == self.size:
             # We may not have reached a terminator, but that's OK.
             return None # reached end
@@ -117,7 +117,7 @@ class StructGroup:
             )
         for name in candidates:
             struct = self.structs[name]
-            result = struct.format_from(source, position)
+            result = struct.format_from(source, position, disassembler)
             if result is not None:
                 return name, result
         # There were candidates, but none worked. Maybe premature end of data?

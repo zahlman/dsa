@@ -1,4 +1,4 @@
-from parse_config import cached_loader
+from parse_config import cached_loader, NotInAnyPath
 from type_loader import TypeDescriptionLSM
 from structgroup_loader import StructGroupDescriptionLSM
 from functools import partial
@@ -40,14 +40,12 @@ class Disassembler:
         self.sizes[location] = size
 
 
-    def _make_chunk(self, source, location, group_name):
+    def _make_chunk(self, source, location, group):
         position = location
         previous = None
         lines = []
-        # N.B. Passed-in function, not a method!
-        group = self.load_group(group_name)
         for i in count():
-            result = group.format_from(source, position, previous, i)
+            result = group.format_from(source, position, previous, i, self)
             if result is None:
                 break
             # TODO: possibly get new chunk requests here.
@@ -64,30 +62,42 @@ class Disassembler:
             _verify(group_name, self.pending_groups[location], location)
         else:
             self.pending_groups[location] = group_name
-            return self.get_label(location, label_base)
+        return self.get_label(location, label_base)
 
 
     def _process_one(self, source):
         # Grab the next chunk to process.
         location = next(iter(self.pending_groups.keys()))
         group_name = self.pending_groups.pop(location)
-        chunk, size = self._make_chunk(source, location, group_name)
-        self._store_result(location, group_name, chunk, size)
+        try:
+            # N.B. Passed-in function, not a method!
+            group = self.load_group(group_name)
+        except NotInAnyPath: # skip chunk for unknown group
+            print(f'Warning: skipping chunk of unknown type {group_name}')
+        else:
+            chunk, size = self._make_chunk(source, location, group)
+            self._store_result(location, group_name, chunk, size)
+
+
+    def _write_chunk(self, outfile, location):
+        group_name = self.used_groups[location]
+        size = self.sizes[location]
+        chunk = self.chunks[location]
+        outfile.write(f'@filter size {size} {{\n')
+        outfile.write(f'@group {group_name} {{\n')
+        for line in chunk:
+            outfile.write(f'{line}\n')
+        outfile.write('}\n')
+        outfile.write('}\n')
 
 
     def _dump(self, outfile):
         for location in sorted(self.labels.keys()):
             label = self.labels[location]
-            group_name = self.used_groups[location]
-            size = self.sizes[location]
-            chunk = self.chunks[location]
             outfile.write(f'@label {label} 0x{location:X}\n')
-            outfile.write(f'@filter size {size} {{\n')
-            outfile.write(f'@group {group_name} {{\n')
-            for line in chunk:
-                outfile.write(f'{line}\n')
-            outfile.write('}\n')
-            outfile.write('}\n\n')
+            if location in self.chunks:
+                self._write_chunk(outfile, location)
+            outfile.write('\n')
 
 
     def __call__(self, source, outfilename):

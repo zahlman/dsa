@@ -83,10 +83,11 @@ class RawField:
 
 
 class Field:
-    def __init__(self, implementation, descriptions, doc):
+    def __init__(self, implementation, descriptions, referent, doc):
         # The bias is added when assembling, deducted when disassembling.
         self.implementation = implementation
         self.descriptions = descriptions
+        self.referent = referent
         self.doc = doc # Unused for now.
 
 
@@ -104,7 +105,7 @@ class Field:
         return str(self.implementation)
 
 
-    def format(self, raw):
+    def format(self, raw, disassembler, member_name):
         value = self.implementation.value(raw)
         for description in self.descriptions:
             try:
@@ -112,7 +113,13 @@ class Field:
             except ValueError as e:
                 self.implementation.throw(e)
             if result is not None:
-                return result
+                if self.referent is None:
+                    return result
+                # Otherwise, inform the disassembler about this pointer,
+                # and let it provide a label name.
+                name = self.implementation.name
+                name = member_name if name is None else f'{member_name}_{name}'
+                return '@' + disassembler.add(self.referent, value, name)
         # No exceptions, but nothing worked
         self.implementation.throw(f'No valid format for value: {value}')
 
@@ -144,6 +151,7 @@ def _field(bits, name, fixed, arguments, description_makers, doc, deferred):
             d(raw.minimum, raw.maximum, bits, base)
             for d in description_makers
         ],
+        flags['referent'],
         doc
     )
 

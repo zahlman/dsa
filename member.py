@@ -14,7 +14,7 @@ class Option:
         return len(self.fields)
 
 
-    def format(self, full_value):
+    def format(self, full_value, disassembler, member_name):
         # Validate fixed value.
         # Only one Option will be tried for formatting, so raise an exception
         # if validation fails.
@@ -23,7 +23,10 @@ class Option:
         # Collect results for each field.
         # TODO: think about how to support other endianness.
         return [
-            field.format((full_value >> offset) & ((1 << field.size) - 1))
+            field.format(
+                (full_value >> offset) & ((1 << field.size) - 1),
+                disassembler, member_name
+            )
             for offset, field in zip(self.offsets, self.fields)
         ]
 
@@ -70,10 +73,12 @@ class Member:
         raise ValueError(f'member {self.name}: {msg}')
 
 
-    def format(self, value):
+    def format(self, value, disassembler):
         try:
             return collect(
-                self.format_option.format(int.from_bytes(value, 'little'))
+                self.format_option.format(
+                    int.from_bytes(value, 'little'), disassembler, self.name
+                )
             )
         except ValueError as e:
             self.throw(e)
