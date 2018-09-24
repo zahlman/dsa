@@ -1,4 +1,4 @@
-from arguments import Arguments, base, boolean, integer
+from arguments import Arguments, base, boolean, integer, string
 from parse_config import parts_of
 from functools import partial
 
@@ -163,7 +163,8 @@ def field_maker(line_tokens, doc, description_makers, deferral):
     if fixed is not None:
         fixed = int(fixed, 0)
     arguments = Arguments(
-        {'bias': integer, 'signed': boolean, 'base': base},
+        # TODO: actually process and use 'referent' values.
+        {'bias': integer, 'signed': boolean, 'base': base, 'referent': string},
         {'bias': 0, 'signed': False, 'base': hex},
         flag_tokens
     )
