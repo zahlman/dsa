@@ -122,7 +122,10 @@ class StructGroup:
             )
         for name in candidates:
             struct = self.structs[name]
-            result = struct.format_from(source, position, disassembler)
+            try:
+                result = struct.format_from(source, position, disassembler)
+            except ValueError as e:
+                raise ValueError(f'Struct {name}: {e}')
             if result is not None:
                 return name, result
         # There were candidates, but none worked. Maybe premature end of data?
