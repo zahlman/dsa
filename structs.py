@@ -102,39 +102,26 @@ class StructGroup:
         self.graph = _normalized_graph(graph, first)
 
 
-    def format_from(self, candidates, source, position):
+    def format_from(self, source, position, previous, count=0):
+        if count == self.size:
+            # We may not have reached a terminator, but that's OK.
+            return None # reached end
+        candidates = self.graph[previous]
+        if not candidates:
+            # If this block is counted, ensure count was made up.
+            if self.size is None:
+                return None
+            missing = self.size - count
+            raise ValueError(
+                f'premature end of chunk; {missing} struct(s) missing'
+            )
         for name in candidates:
             struct = self.structs[name]
             result = struct.format_from(source, position)
             if result is not None:
-                tokens, size = result
-                return ' '.join((name,) + tokens), size, name
-        raise ValueError(f'incorrectly formatted data at {position:X}')
-
-
-    def format_chunk(self, source, position):
-        candidates = self.graph[None]
-        count = -1 if self.size is None else self.size
-        while count != 0 and position < len(source) and candidates:
-            result, size, used = self.format_from(
-                candidates, source, position
-            )
-            candidates = self.graph[used]
-            position += size
-            yield result
-            count -= 1
-        if count > 0:
-            raise ValueError(
-                f'premature end of chunk; {count} struct(s) missing'
-            )
-        if candidates and count < 0:
-            # when count == 0, we may not have reached a terminator, but that's
-            # explicitly OK since the point is that the count determines the
-            # chunk boundary.
-            assert position == len(source)
-            raise ValueError(
-                "premature end of data; didn't reach terminator struct"
-            )
+                return name, result
+        # There were candidates, but none worked. Maybe premature end of data?
+        raise ValueError(f'invalid source data')
 
 
     def parse(self, tokens, previous=None):
