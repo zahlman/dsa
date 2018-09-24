@@ -26,13 +26,12 @@ class LabelledRangeDescription:
         if value < self.lowest or value > self.highest:
             # Might still be representable another way.
             return None
-        text = self.numeric_formatter(value)
         # Special case: when the range describes a single number, the label
         # is not annotated with an offset.
         if self.lowest == self.highest:
             return self.label
         # Otherwise, it's annotated thus:
-        offset = value - self.lowest
+        text = self.numeric_formatter(value - self.lowest)
         return f'{self.label}({text})'
 
 
