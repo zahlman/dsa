@@ -9,7 +9,7 @@ def _struct_regex(member_data):
     return re.compile(b''.join(
         _regex_component(member.size, fixed)
         for member, fixed in member_data
-    ))
+    ), re.DOTALL)
 
 
 def _template_component(size, fixed):
