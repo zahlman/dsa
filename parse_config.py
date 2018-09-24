@@ -78,7 +78,7 @@ def create(machine, name, lines):
         try:
             machine.add_line(position, indent, line_tokens, doc)
         except ValueError as e:
-            raise ValueError('Line {position}: {e}')
+            raise ValueError(f'Line {position}: {e}')
     return machine.result(name)
 
 
@@ -90,6 +90,8 @@ def load(new_state_machine, paths, name):
                 return create(new_state_machine(), name, f)
         except FileNotFoundError:
             continue
+        except ValueError as e:
+            raise ValueError(f'File {filename}: {e}')
     else:
         raise FileNotFoundError(f'{name}.txt not found in any path')
 
