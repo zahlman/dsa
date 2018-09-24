@@ -173,7 +173,7 @@ def field_maker(line_tokens, doc, description_makers, deferral):
     arguments = Arguments(
         # TODO: actually process and use 'referent' values.
         {'bias': integer, 'signed': boolean, 'base': base, 'referent': string},
-        {'bias': 0, 'signed': False, 'base': hex},
+        {'bias': 0, 'signed': False, 'base': hex, 'referent': None},
         flag_tokens
     )
     arguments.add_requests(deferral)
