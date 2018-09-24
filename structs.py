@@ -86,6 +86,10 @@ def _normalized_graph(graph, first):
             )
         result[current] = followers
     result[None] = all_nodes if first is None else first
+    # Preserve order.
+    ordering = list(graph.keys()).index
+    for k, v in result.items():
+        result[k] = tuple(sorted(v, key=ordering))
     return result
 
 

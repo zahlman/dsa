@@ -1,6 +1,7 @@
 from arguments import boolean, parameters, positive_integer, one_of
 from parse_config import cached_loader, parts_of, process
 from structs import Struct, StructGroup
+from collections import OrderedDict
 
 
 def parse_options(line_tokens):
@@ -53,10 +54,10 @@ class StructData:
 class StructGroupDescriptionLSM:
     def __init__(self, load_type):
         self.group_doc = []
-        self.structs = {}
+        self.structs = OrderedDict()
         self.options = None
         self.struct_data = None
-        self.graph = {}
+        self.graph = OrderedDict()
         self.load_type = load_type
 
 
