@@ -28,7 +28,7 @@ class Disassembler:
             return self.labels[location]
         used = set(self.labels.values())
         for i in count(1):
-            suggestion = f'{base}_{i}'
+            suggestion = base if i == 1 else f'{base}_{i}'
             if suggestion not in used:
                 self.labels[location] = suggestion
                 return suggestion
