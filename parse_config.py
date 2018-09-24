@@ -82,18 +82,33 @@ def create(machine, name, lines):
     return machine.result(name)
 
 
+class NotInAnyPath(FileNotFoundError):
+    def __init__(self, name):
+        self.name = name
+
+
+    def __str__(self):
+        return f'{self.name}.txt not found in any path'
+
+
 def load(new_state_machine, paths, name):
     for folder in paths:
         try:
             filename = os.path.join(folder, f'{name}.txt')
             with open(filename) as f:
+                # N.B. this might end up making a recusive call, in order to
+                # load a type file needed by a structgroup file.
+                # The custom exception setup here ensures that the type file
+                # is correctly reported as missing in this case, rather than
+                # the structgroup file.
                 return create(new_state_machine(), name, f)
-        except FileNotFoundError:
+        except NotInAnyPath: # directly bail out of a recursive call.
+            raise
+        except FileNotFoundError: # local open() failed; try another path.
             continue
         except ValueError as e:
             raise ValueError(f'File {filename}: {e}')
-    else:
-        raise FileNotFoundError(f'{name}.txt not found in any path')
+    raise NotInAnyPath(name)
 
 
 # While it's true that the underlying file could change between calls, we would
