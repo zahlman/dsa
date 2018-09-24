@@ -95,11 +95,16 @@ class StructGroup:
         first=None, align=4, endian='little', size=None
     ):
         self.structs = structs # TODO: optimized dispatch
-        self.align = align
+        self.alignment = align
         self.endian = endian # TODO: implement big-endian
         self.size = size
         self.doc = doc # Unused for now.
         self.graph = _normalized_graph(graph, first)
+
+
+    def align(self, position):
+        alignment = self.alignment
+        return ((position + alignment - 1) // alignment) * alignment
 
 
     def format_from(self, source, position, previous, count, disassembler):

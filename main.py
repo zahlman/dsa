@@ -45,6 +45,7 @@ class Disassembler:
         previous = None
         lines = []
         for i in count():
+            position = group.align(position)
             result = group.format_from(source, position, previous, i, self)
             if result is None:
                 break
@@ -74,6 +75,7 @@ class Disassembler:
             group = self.load_group(group_name)
         except NotInAnyPath: # skip chunk for unknown group
             print(f'Warning: skipping chunk of unknown type {group_name}')
+            #raise
         else:
             chunk, size = self._make_chunk(source, location, group)
             self._store_result(location, group_name, chunk, size)
