@@ -70,11 +70,25 @@ def process(lines):
     yield position, indent, tokenize(line), doc
 
 
-# Wrappers for the process of loading a file.
-# Separating this out is better for testing purposes, as we can create a
-# temporary template from a list of strings without file I/O.
-def create(machine, name, lines):
-    for position, indent, line_tokens, doc in process(lines):
+def get_file(paths, name):
+    for folder in paths:
+        try:
+            filename = os.path.join(folder, f'{name}.txt')
+            with open(filename) as f:
+                return list(process(f))
+        except FileNotFoundError: # local open() failed; try another path.
+            continue
+    raise FileNotFoundError(f'no valid path contained {name}.txt')
+
+
+def library(paths):
+    return lru_cache(None)(partial(get_file, paths))
+
+
+# Separating this out allows for testing from hard-coded `lines`.
+def create(new_state_machine, lines, name):
+    machine = new_state_machine()
+    for position, indent, line_tokens, doc in lines:
         try:
             machine.add_line(position, indent, line_tokens, doc)
         except ValueError as e:
@@ -82,36 +96,11 @@ def create(machine, name, lines):
     return machine.result(name)
 
 
-class NotInAnyPath(FileNotFoundError):
-    def __init__(self, name):
-        self.name = name
-
-
-    def __str__(self):
-        return f'{self.name}.txt not found in any path'
-
-
-def load(new_state_machine, paths, name):
-    for folder in paths:
-        try:
-            filename = os.path.join(folder, f'{name}.txt')
-            with open(filename) as f:
-                # N.B. this might end up making a recusive call, in order to
-                # load a type file needed by a structgroup file.
-                # The custom exception setup here ensures that the type file
-                # is correctly reported as missing in this case, rather than
-                # the structgroup file.
-                return create(new_state_machine(), name, f)
-        except NotInAnyPath: # directly bail out of a recursive call.
-            raise
-        except FileNotFoundError: # local open() failed; try another path.
-            continue
-        except ValueError as e:
-            raise ValueError(f'File {filename}: {e}')
-    raise NotInAnyPath(name)
+def load(new_state_machine, get_file, name):
+    return create(new_state_machine, get_file(name), name)
 
 
 # While it's true that the underlying file could change between calls, we would
 # actually prefer to ignore such changes.
 def cached_loader(new_state_machine, paths):
-    return lru_cache(None)(partial(load, new_state_machine, paths))
+    return lru_cache(None)(partial(load, new_state_machine, library(paths)))

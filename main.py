@@ -1,4 +1,4 @@
-from parse_config import cached_loader, NotInAnyPath
+from parse_config import cached_loader
 from type_loader import TypeDescriptionLSM
 from structgroup_loader import StructGroupDescriptionLSM
 from functools import partial
@@ -73,7 +73,7 @@ class Disassembler:
         try:
             # N.B. Passed-in function, not a method!
             group = self.load_group(group_name)
-        except NotInAnyPath: # skip chunk for unknown group
+        except FileNotFoundError: # skip chunk for unknown group
             print(f'Warning: skipping chunk of unknown type {group_name}')
             #raise
         else:
