@@ -44,8 +44,8 @@ class Disassembler:
         position = location
         previous = None
         lines = []
+        group.check_alignment(position)
         for i in count():
-            position = group.align(position)
             result = group.format_from(source, position, previous, i, self)
             if result is None:
                 break

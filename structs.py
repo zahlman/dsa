@@ -1,53 +1,42 @@
 import re
 
 
-def _regex_component(size, fixed):
-    return b'(' + (b'.' * size) + b')' if fixed is None else re.escape(fixed)
-
-
-def _struct_regex(member_data):
-    return re.compile(b''.join(
-        _regex_component(member.size, fixed)
-        for member, fixed in member_data
-    ), re.DOTALL)
-
-
-def _template_component(size, fixed):
-    return bytes(size) if fixed is None else fixed
-
-
-def _struct_template(member_data):
-    return bytearray(b''.join(
-        _template_component(member.size, fixed)
-        for member, fixed in member_data
-    ))
-
-
-def _struct_offsets(member_data):
-    # Indicates where each parsed member goes in the parsed struct.
+def _struct_info(member_data, alignment):
+    pattern = bytearray()
+    # The template value is "write-only"; the non-fixed bytes of the
+    # bytearray will be replaced each time and are meaningless except
+    # when a copy is made by `parse`.
+    template = bytearray()
+    offsets = []
+    members = []
     position = 0
     for member, fixed in member_data:
+        size = member.size
         if fixed is None:
-            yield position
-        position += member.size
+            offsets.append(position)
+            members.append(member)
+            pattern.extend(b'(' + (b'.' * size) + b')')
+            template.extend(bytes(size))
+        else:
+            assert len(fixed) == size
+            pattern.extend(re.escape(fixed))
+            template.extend(fixed)
+        position += size
+    assert position == len(template)
+    padding = -position % alignment
+    pattern.extend(b'.' * padding)
+    template.extend(bytes(padding))
+    return (
+        re.compile(bytes(pattern), re.DOTALL), template,
+        tuple(offsets), tuple(members)
+    )
 
-
+    
 class Struct:
-    def __init__(self, member_data, doc):
-        assert all(
-            (fixed is None) or (len(fixed) == member.size)
-            for member, fixed in member_data
+    def __init__(self, member_data, alignment, doc):
+        self.pattern, self.template, self.offsets, self.members = _struct_info(
+            member_data, alignment
         )
-        self.pattern = _struct_regex(member_data)
-        self.members = [
-            member for member, fixed in member_data
-            if fixed is None
-        ]
-        # The template value is "write-only"; the non-fixed bytes of the
-        # bytearray will be replaced each time and are meaningless except
-        # when a copy is made by `parse`.
-        self.template = _struct_template(member_data)
-        self.offsets = tuple(_struct_offsets(member_data))
         self.doc = doc # Unused for now.
 
 
@@ -106,9 +95,11 @@ class StructGroup:
         self.graph = _normalized_graph(graph, first)
 
 
-    def align(self, position):
-        alignment = self.alignment
-        return ((position + alignment - 1) // alignment) * alignment
+    def check_alignment(self, position):
+        if position % self.alignment != 0:
+            raise ValueError(
+                f'chunk not aligned to multiple of {self.alignment} boundary'
+            )
 
 
     def format_from(self, source, position, previous, count, disassembler):

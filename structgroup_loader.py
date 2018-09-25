@@ -26,16 +26,17 @@ def parse_struct_header(line_tokens):
 
 
 class StructData:
-    def __init__(self, line_tokens):
+    def __init__(self, line_tokens, alignment):
         self.name, self.followers = parse_struct_header(line_tokens)
         self.struct_doc = []
         self.member_data = []
+        self.alignment = alignment
 
 
     def create(self):
         return (
             self.name,
-            Struct(self.member_data, self.struct_doc),
+            Struct(self.member_data, self.alignment, self.struct_doc),
             self.followers
         )
 
@@ -86,7 +87,7 @@ class StructGroupDescriptionLSM:
             return
         # Otherwise: beginning of a new struct.
         self._push_old_struct()
-        self.struct_data = StructData(line_tokens)
+        self.struct_data = StructData(line_tokens, self.options.get('align', 1))
 
 
     def result(self, name):
