@@ -45,6 +45,10 @@ class StructData:
         self.struct_doc.append(doc)
         tnf, *options = line_tokens
         typename, name, fixed = parts_of(tnf, ':', 1, 3, False)
+        if fixed is None and name is None:
+            raise ValueError(f'member must have either a name or a fixed value')
+        if fixed is not None and name is not None:
+            raise ValueError(f'member with fixed value may not be named')
         member_maker, whitelist = load_type(typename)
         member = member_maker(parameters(whitelist, options), name)
         if fixed is not None:
