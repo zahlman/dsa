@@ -1,78 +1,80 @@
-from description import description_maker
-from field import field_maker
-from member import member_maker
+from description import EnumDescriptionLSM, FlagsDescriptionLSM
+from member import OptionLSM, MemberLSM
 from parse_config import cached_loader
-
-
-def is_option_separator(line_tokens):
-    return len(line_tokens) == 1 and all(c == '-' for c in line_tokens[0])
 
 
 class TypeDescriptionLSM:
     def __init__(self):
-        self._reset_field_data()
-        self.member_doc = []
-        self.field_makers = [[]] # list of lists, one for each Option.
-        self.deferral = {}
+        self.current_section = None
+        self.values = {}
+        self.options = {}
+        self.types = {}
 
 
-    def _reset_field_data(self):
-        self.description_makers = []
-        self.field_tokens = None
-        self.field_doc = None
+    def _get_dict(self, section_type):
+        return {
+            'flags': self.values,
+            'enum': self.values,
+            'option': self.options,
+            'type': self.types
+        }[section_type]
 
 
-    def _finish_field(self):
-        self.field_makers[-1].append(field_maker(
-            self.field_tokens, self.field_doc,
-            self.description_makers, self.deferral
-        ))
-        self._reset_field_data()
+    def _get_loader(self, section_type):
+        return {
+            'flags': FlagsDescriptionLSM,
+            'enum': EnumDescriptionLSM,
+            'option': OptionLSM,
+            'type': MemberLSM
+        }[section_type]
 
 
-    def _finish_option(self):
-        if self.field_tokens is None:
-            raise ValueError('option must have at least one field')
-        self._finish_field()
-        assert self.field_makers[-1]
+    def _continue_block(self, line_tokens, doc):
+        if self.current_section is None:
+            raise ValueError(f'indented line outside block')
+        self.current_section.add_line(line_tokens, doc)
 
 
-    def add_doc(self, doc):
-        self.member_doc.extend(doc)
+    def _next_block(self, line_tokens, doc):
+        try:
+            section_type, name = line_tokens
+        except ValueError:
+            raise ValueError(f'invalid section header')
+        section = self._get_loader(section_type)(doc)
+        container = self._get_dict(section_type)
+        if name in container:
+            raise ValueError(
+                f"duplicate/conflicting definition for '{section_type} {name}'"
+            )
+        container[name] = section
+        self.current_section = section
 
 
-    def push_description(self, line_tokens, doc):
-        if self.field_tokens is None:
-            raise ValueError('description must be inside a field')
-        self.description_makers.append(description_maker(line_tokens, doc))
-
-
-    def start_field(self, line_tokens, doc):
-        if self.field_tokens is not None:
-            self._finish_field()
-        self.field_tokens = line_tokens
-        self.field_doc = doc
-
-
-    def next_option(self):
-        self._finish_option()
-        self.field_makers.append([])
+    def _add_line_raw(self, indent, line_tokens, doc):
+        if indent:
+            self._continue_block(line_tokens, doc)
+        else:
+            self._next_block(line_tokens, doc)
 
 
     def add_line(self, position, indent, line_tokens, doc):
-        if position == 0:
-            self.add_doc(doc)
-        elif is_option_separator(line_tokens):
-            self.add_doc(doc)
-            self.next_option()
-        elif indent:
-            self.push_description(line_tokens, doc)
-        else:
-            self.start_field(line_tokens, doc)
+        try:
+            if position != 0:
+                self._add_line_raw(indent, line_tokens, doc)
+        except ValueError as e:
+            raise ValueError(f'Line {position}: {e}')
 
 
     def result(self, name):
-        self._finish_option()
-        return member_maker(
-            name, self.field_makers, self.member_doc
-        ), self.deferral
+        description_lookup = {
+            name: lsm.result()
+            for name, lsm in self.values.items()
+        }
+        option_lookup = {
+            name: lsm.result(description_lookup)
+            for name, lsm in self.options.items()
+        }
+        return {
+            name: lsm.result(option_lookup)
+            for name, lsm in self.types.items()
+        }

@@ -1,12 +1,14 @@
+from field import make_field
 from functools import partial
 
 
 class Option:
-    def __init__(self, offsets, fields, fixed_mask, fixed_value):
+    def __init__(self, offsets, fields, fixed_mask, fixed_value, size):
         self.offsets = offsets
         self.fields = fields
         self.fixed_mask = fixed_mask
         self.fixed_value = fixed_value
+        self.size = size
 
 
     @property
@@ -15,11 +17,8 @@ class Option:
 
 
     def format(self, full_value, disassembler, member_name):
-        # Validate fixed value.
-        # Only one Option will be tried for formatting, so raise an exception
-        # if validation fails.
         if (full_value & self.fixed_mask) != self.fixed_value:
-            raise ValueError('invalid fixed data during formatting')
+            return None # try the next Option.
         # Collect results for each field.
         # TODO: think about how to support other endianness.
         return [
@@ -41,122 +40,108 @@ class Option:
         )
 
 
-def collect(items):
+def _collect(items):
     result = ', '.join(items)
     if result != ''.join(result.split()): # embedded whitespace
         result = f'[{result}]'
     return result
 
 
-def itemize(raw):
+def _itemize(raw):
     # N.B. Even if there's no whitespace, there could still be multiple params.
     return [x.strip() for x in raw.split(',')]
 
 
+def _build_option_map(options):
+    result = {}
+    sizes = set()
+    for option in options:
+        count = option.arguments
+        sizes.add(option.size)
+        if count in result:
+            raise ValueError('Options must have unique argument counts')
+        result[count] = option
+    if len(sizes) > 1:
+        raise ValueError('Inconsistent Option sizes')
+    try:
+        return sizes.pop(), result
+    except KeyError:
+        raise ValueError('Must have at least one Option')
+
+
 class Member:
-    # All constraints to be verified in an external process.
-    # Do not call this constructor directly.
-    def __init__(self, typename, name, size, format_option, option_map, doc):
+    def __init__(self, typename, options, doc):
+        # member "name" will be handled at the struct level.
         self.typename = typename
-        self.name = name
-        self.size = size # byte count!
-        self.format_option = format_option
-        self.option_map = option_map
+        self.options = options
+        self.size, self.option_map = _build_option_map(options)
         self.doc = doc # Unused for now.
 
 
-    def __str__(self):
-        return f'{self.name} of type {self.typename}'
-
-
-    def throw(self, msg):
-        raise ValueError(f'member {self.name}: {msg}')
-
-
-    def format(self, value, disassembler):
-        try:
-            return collect(
-                self.format_option.format(
-                    int.from_bytes(value, 'little'), disassembler, self.name
-                )
+    def format(self, value, disassembler, name):
+        for option in self.options:
+            result = option.format(
+                int.from_bytes(value, 'little'), disassembler, name
             )
-        except ValueError as e:
-            self.throw(e)
+            if result is not None:
+                return _collect(result)
+        raise ValueError("couldn't format data (no matching Option)")
 
 
     def parse(self, raw):
-        items = itemize(raw)
+        items = _itemize(raw)
         try:
             parser = self.option_map[len(items)]
         except KeyError:
-            self.throw(
+            raise ValueError(
                 f'Invalid number of parameters for {self.typename} type'
             )
-        try:
-            return parser.parse(items).to_bytes(self.size, 'little')
-        except ValueError as e:
-            self.throw(e)
+        return parser.parse(items).to_bytes(self.size, 'little')
 
 
-def _sorted_option_fields(field_makers, deferred):
-    # No doc is associated at the Option level.
-    # TODO: implement custom ordering.
-    return [f(deferred) for f in field_makers]
+class OptionLSM:
+    def __init__(self, doc):
+        self.field_makers = []
+        self.doc = doc # will be ignored...
 
 
-def _prepared_option_fields(raw_fields):
-    position, offsets, fields, fixed_mask, fixed_value = 0, [], [], 0, 0
-    for f in raw_fields:
-        size = f.size
-        if f.is_fixed:
-            mask = (1 << size) - 1
-            fixed_mask |= mask << position
-            assert 0 <= f.raw <= mask
-            fixed_value |= f.raw << position
-        else:
-            offsets.append(position)
-            fields.append(f)
-        position += size
-    return position, offsets, fields, fixed_mask, fixed_value
+    def add_line(self, line_tokens, doc):
+        self.field_makers.append(partial(make_field, line_tokens, doc))
 
 
-def _option(field_makers, deferred):
-    raw_fields = _sorted_option_fields(field_makers, deferred)
-    option_size, *option_data = _prepared_option_fields(raw_fields)
-    if option_size % 8:
-        raise ValueError('option size must be a multiple of 8 bits')
-    return option_size // 8, Option(*option_data)
+    def result(self, description_lookup):
+        position, offsets, fields, fixed_mask, fixed_value = 0, [], [], 0, 0
+        for maker in self.field_makers:
+            field, fixed, bits = maker(description_lookup)
+            if fixed is not None:
+                mask = (1 << bits) - 1
+                fixed_mask |= mask << position
+                assert 0 <= fixed <= mask
+                fixed_value |= fixed << position
+            else:
+                offsets.append(position)
+                fields.append(field)
+            position += bits
+        if position % 8:
+            raise ValueError('option size must be a multiple of 8 bits')
+        return Option(offsets, fields, fixed_mask, fixed_value, position // 8)
 
 
-def _parameterize(typename, deferred):
-    parameters = sorted(f'{k}={v}' for k, v in deferred.items())
-    return f"{typename}({', '.join(parameters)})"
+class MemberLSM:
+    def __init__(self, doc):
+        self.option_names = []
+        self.doc = doc
 
 
-def _member(field_maker_groups, typename, doc, deferred, name):
-    format_option = None
-    option_map = {}
-    size = None
-    for field_makers in field_maker_groups:
-        o_size, option = _option(field_makers, deferred)
-        if size is None:
-            size = o_size
-        elif size != o_size:
-            raise ValueError(
-                'inconsistent bit size for member'
-            )
-        if option.arguments in option_map:
-            raise ValueError(
-                'formats for member must have all different argument counts'
-            )
-        option_map[option.arguments] = option
-        if format_option is None:
-            format_option = option
-    if format_option is None:
-        raise ValueError('no formatting options provided for member')
-    typename = _parameterize(typename, deferred)
-    return Member(typename, name, size, format_option, option_map, doc)
+    def add_line(self, line_tokens, doc):
+        self.doc.extend(doc)
+        name, *junk = line_tokens
+        if junk:
+            raise ValueError('junk data after option name')
+        self.option_names.append(name)
 
 
-def member_maker(typename, field_makers, doc):
-    return partial(_member, field_makers, typename, doc)
+    def result(self, option_lookup):
+        return Member(
+            'FIXME', [option_lookup[o] for o in self.option_names], self.doc
+        )

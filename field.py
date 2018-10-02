@@ -1,34 +1,19 @@
-from arguments import Arguments, base, boolean, integer, string
+from arguments import base, boolean, integer, parameters, string
+from description import Raw
 from parse_config import parts_of
 from functools import partial
 
 
-class FixedField:
-    def __init__(self, name, bits, bias, signed, value, doc):
-        self.name = name
-        raw = value + bias
-        count = 1 << bits
-        halfcount = 1 << (bits - 1)
-        if signed and raw < 0:
-            raw += count
-        if not 0 <= raw < count:
-            raise ValueError('fixed value out of representable range')
-        self.raw = raw
-        self.size = bits
-
-
-    @property
-    def is_fixed(self):
-        return True
-
-
-class RawField:
-    def __init__(self, name, bits, bias, signed):
-        self.name = name
-        # The bias is added when assembling, deducted when disassembling.
+class FieldTranslation:
+    def __init__(self, bits, bias, signed):
         self.bits = bits
         self.bias = bias
         self.signed = signed
+
+
+    @property
+    def size(self):
+        return self.bits
 
 
     @property
@@ -62,7 +47,7 @@ class RawField:
     # Convert value computed from parsing into one stored in the data.
     def raw(self, value):
         if not self.minimum <= value <= self.maximum:
-            self.throw(
+            raise ValueError(
                 f'{value} out of range {self.minimum}..{self.maximum}'
             )
         value += self.bias
@@ -73,110 +58,89 @@ class RawField:
         return value
 
 
-    def __str__(self):
-        low, high, base = self.minimum, self.maximum
-        return f'Field {self.name} {{range: {low}..{high}}}'
+class Field:
+    def __init__(
+        self, name, translation, formatter, description, referent, doc
+    ):
+        self.name = name
+        self.translation = translation
+        self.formatter = formatter
+        self.description = description
+        self.referent = referent
+        self.doc = doc
+
+
+    @property
+    def size(self):
+        return self.translation.size
 
 
     def throw(self, msg):
         raise ValueError(f'Field {self.name}: {msg}')
 
 
-class Field:
-    def __init__(self, implementation, descriptions, referent, doc):
-        # The bias is added when assembling, deducted when disassembling.
-        self.implementation = implementation
-        self.descriptions = descriptions
-        self.referent = referent
-        self.doc = doc # Unused for now.
-
-
-    @property
-    def is_fixed(self):
-        return False
-
-
-    @property
-    def size(self):
-        return self.implementation.bits
-
-
-    def __str__(self):
-        return str(self.implementation)
-
-
+    # When formatting, exceptions are not raised at this level, since some
+    # source data might only be formattable by certain Options. Instead, we
+    # return `None` and let the Member iterate to an Option that works.
     def format(self, raw, disassembler, member_name):
-        value = self.implementation.value(raw)
-        for description in self.descriptions:
-            try:
-                result = description.format(value)
-            except ValueError as e:
-                self.implementation.throw(e)
-            if result is not None:
-                if self.referent is None:
-                    return result
-                # Otherwise, inform the disassembler about this pointer,
-                # and let it provide a label name.
-                name = self.implementation.name
-                name = member_name if name is None else f'{member_name}_{name}'
-                return '@' + disassembler.add(self.referent, value, name)
-        # No exceptions, but nothing worked
-        self.implementation.throw(f'No valid format for value: {value}')
+        value = self.translation.value(raw)
+        result = self.description.format(value, self.formatter)
+        if result is None or self.referent is None:
+            return result
+        # If we have a valid pointer, inform the disassembler about it,
+        # and get a label name from there.
+        name = self.name
+        name = member_name if name is None else f'{member_name}_{name}'
+        return '@' + disassembler.add(self.referent, value, name)
 
 
     def parse(self, text):
-        for description in self.descriptions:
-            try:
-                result = description.parse(text)
-            except ValueError as e:
-                self.implementation.throw(e)
+        # TODO: handle referent labels.
+        try:
+            result = self.description.parse(text)
             if result is not None:
-                return self.implementation.raw(result)
-        # No exceptions, but nothing worked
-        self.implementation.throw(f"Couldn't parse: '{text}'")
+                result = self.translation.raw(result)
+            return result
+        except ValueError as e:
+            self.throw(e)
 
 
-def _field(bits, name, fixed, arguments, description_makers, doc, deferred):
-    flags = arguments.evaluate(deferred)
-    bias, signed, base = flags['bias'], flags['signed'], flags['base']
-    if fixed is not None:
-        return FixedField(
-            name, bits, bias, signed, fixed, doc
-        )
-
-    raw = RawField(name, bits, bias, signed)
-    return Field(
-        raw,
-        [
-            d(raw.minimum, raw.maximum, bits, base)
-            for d in description_makers
-        ],
-        flags['referent'],
-        doc
-    )
-
-
-def field_maker(line_tokens, doc, description_makers, deferral):
-    """Creates a factory that will create a Field using deferred info.
+def make_field(line_tokens, doc, description_lookup):
+    """Creates a factory that will create a Field later, along with the
+    `fixed` value (or None) that it will parse later, and the field size.
     line_tokens -> tokenized line from the config file.
     doc -> associated doc lines.
-    description_makers -> factories for contained Descriptions.
-    deferral -> accumulator for parameters that will be deferred.
 
     The factory expects the following parameters:
-    deferred -> a dict of deferred parameters used to customize the Field."""
+    description -> resolved Description object for the field."""
     bnf, *flag_tokens = line_tokens
     bits, name, fixed = parts_of(bnf, ':', 1, 3, False)
     bits = int(bits, 0)
-    if fixed is not None:
-        fixed = int(fixed, 0)
-    arguments = Arguments(
-        # TODO: actually process and use 'referent' values.
-        {'bias': integer, 'signed': boolean, 'base': base, 'referent': string},
-        {'bias': 0, 'signed': False, 'base': hex, 'referent': None},
+    params = parameters(
+        {
+            'bias': integer, 'signed': boolean, 'base': base,
+            'referent': string, 'values': string
+        },
         flag_tokens
     )
-    arguments.add_requests(deferral)
-    return partial(
-        _field, bits, name, fixed, arguments, description_makers, doc
+    translation = FieldTranslation(
+        bits, params.get('bias', 0), params.get('signed', False)
     )
+    try:
+        values = params['values']
+        try:
+            description = description_lookup[values]
+        except KeyError:
+            raise ValueError(f"unrecognized description name '{values}'")
+    except KeyError:
+        description = Raw
+    referent = params.get('referent', None)
+    field = Field(
+        name, translation, params.get('base', hex),
+        description, referent, doc
+    )
+    if fixed is not None:
+        if referent is not None:
+            raise ValueError('fixed field may not have a referent')
+        fixed = field.parse(fixed)
+    return field, fixed, bits

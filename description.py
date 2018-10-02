@@ -1,93 +1,73 @@
+from parse_config import parts_of
 from functools import partial
 
 
-class LabelledRangeDescription:
-    def __init__(self, lowest, highest, label, numeric_formatter, doc):
-        self.lowest = lowest
-        self.highest = highest
-        self.label = label
-        self.numeric_formatter = numeric_formatter
-        # When parsing, any base is allowed with the appropriate prefix.
+class EnumDescription:
+    def __init__(self, ranges, doc):
+        self.ranges = ranges
         self.doc = doc # Unused for now.
 
 
-    def __str__(self):
-        label = self.label
-        low = self.numeric_formatter(self.lowest)
-        high = self.numeric_formatter(self.highest)
-        size = self.highest - self.lowest
-        name = 'LabelledRangeDescription'
-        if size:
-            return f'{name}: {label}(0)={low} .. {label}({size})={high}'
-        return f'{name}: {label}={low}'
+    def _format_enum(self, value, numeric_formatter, low, high, label):
+        assert low <= value <= high
+        if label is None:
+            return numeric_formatter(value)
+        if low == high:
+            return label
+        return f'{label}({numeric_formatter(value - low)})'
 
 
-    def format(self, value):
-        if value < self.lowest or value > self.highest:
-            # Might still be representable another way.
-            return None
-        # Special case: when the range describes a single number, the label
-        # is not annotated with an offset.
-        if self.lowest == self.highest:
-            return self.label
-        # Otherwise, it's annotated thus:
-        text = self.numeric_formatter(value - self.lowest)
-        return f'{self.label}({text})'
-
-
-    def parse(self, text):
-        if not text.startswith(self.label):
-            # Might still correspond to a different Description.
-            return None
-        text = text[len(self.label):]
-        # Is this the short form with an annotation not required?
-        if (self.lowest == self.highest) and not text:
-            return self.lowest
-        # If the annotation isn't present, flag an error.
-        # This means that if one label for a Field value is a substring of
-        # another, the longer one needs to be checked first.
-        if not (text.startswith('(') and text.endswith(')')):
-            raise ValueError('Missing offset for labelled range')
-        value = int(text[1:-1], 0) + self.lowest
-        if value < self.lowest or value > self.highest:
-            raise ValueError('Invalid offset for labelled range')
-        return value
-
-
-class RangeDescription:
-    def __init__(self, lowest, highest, numeric_formatter, doc):
-        self.lowest = lowest
-        self.highest = highest
-        self.numeric_formatter = numeric_formatter
-        # When parsing, any base is allowed with the appropriate prefix.
-        self.doc = doc # Unused for now.
-
-
-    def __str__(self):
-        low = self.numeric_formatter(self.lowest)
-        high = self.numeric_formatter(self.highest)
-        if self.lowest == self.highest:
-            return f'RangeDescription: {low}'
-        else:
-            return f'RangeDescription: {low} .. {high}'
-
-
-    def format(self, value):
-        if value < self.lowest or value > self.highest:
-            # Might still be representable another way.
-            return None
-        return self.numeric_formatter(value)
+    def format(self, value, numeric_formatter):
+        try:
+            match = next(
+                (low, high, label)
+                for low, high, label in self.ranges
+                if low <= value <= high
+            )
+        except StopIteration:
+            raise ValueError(f'No valid format for value: {value}')
+        return self._format_enum(value, numeric_formatter, *match)
 
 
     def parse(self, text):
         try:
-            value = int(text, 0)
+            return next(
+                self._parse_enum(text, low, high, label)
+                for low, high, label in self.ranges
+                if self._ok_enum(text, low, high, label)
+            )
+        except StopIteration:
+            raise ValueError(f"Couldn't parse: {text}")
+
+
+    def _ok_enum(self, text, low, high, label):
+        try:
+            # A raw integer must be within range.
+            return low <= int(text, 0) <= high
         except ValueError:
-            # Might still correspond to a different Description.
-            return None
-        # If the value is out of range, it might *still* correspond
-        # to a different Description (for another range).
-        return value if self.lowest <= value <= self.highest else None
+            # A labelled value must match the specified label.
+            return label is not None and text.startswith(label)
+
+
+    def _parse_enum(self, text, low, high, label):
+        try:
+            result = int(text, 0)
+            assert low <= result <= high
+        except ValueError:
+            assert label is not None and text.startswith(label)
+            text = text[len(label):]
+            if low == high and not text:
+                result = low
+            elif not (text.startswith('(') and text.endswith(')')):
+                raise ValueError('Missing required offset for labelled range')
+            else:
+                try:
+                    result = int(text[1:-1], 0) + low
+                except ValueError:
+                    raise ValueError('Invalid offset for labelled range')
+            if not low <= result <= high:
+                raise ValueError('Offset for labelled range out of bounds')
+        return result
 
 
 class FlagsDescription:
@@ -96,16 +76,12 @@ class FlagsDescription:
         self.doc = doc # Unused for now.
 
 
-    def __str__(self):
-        return f"FlagsDescription: {' | '.join(self.names)}"
-
-
-    def format(self, value):
+    def format(self, value, numeric_formatter):
         set_flags = []
         for i, name in enumerate(self.names):
             if value & (1 << i):
                 set_flags.append(name)
-        return ' | '.join(set_flags)
+        return ' | '.join(set_flags) if set_flags else numeric_formatter(0)
 
 
     def parse(self, text):
@@ -124,87 +100,62 @@ class FlagsDescription:
         return None if set_flags else value
 
 
-def _is_number_or_blank(text):
-    if not text:
-        return True
-    try:
-        int(text, 0)
-        return True
-    except ValueError:
-        return False
+class RawDescription:
+    def __init__(self):
+        pass
 
 
-def _normalize_range(items, minimum, maximum):
-    count = len(items)
-    if count > 2:
-        raise ValueError('too many parameters for range description')
-
-    if count == 2:
-        low, high = items
-        low = int(low, 0) if low else minimum
-        high = int(high, 0) if high else maximum
-        if low < minimum or high > maximum:
-            raise ValueError(
-                f"range {low}..{high} can't be represented by this field"
-            )
-        return low, high
-
-    # can't be empty here; if there was a label, it would have been
-    # parsed as a flag name, and otherwise the line would be empty.
-    assert count == 1
-    value = items[0]
-    if not value:
-        # This only happens for a LabelledRangeDescription (e.g. `foo:`);
-        # otherwise, the whole line would be empty.
-        raise ValueError('no range given for labelled range description')
-    value = int(value, 0)
-    if not minimum <= value <= maximum:
-        raise ValueError(
-            f"value {value} can't be represented by this field"
-        )
-    return value, value
+    def format(self, value, numeric_formatter):
+        return numeric_formatter(value)
 
 
-def _rd(
-    range_items, doc, minimum, maximum, bits, formatter
-):
-    low, high = _normalize_range(range_items, minimum, maximum)
-    return RangeDescription(low, high, formatter, doc)
+    def parse(self, text):
+        return int(text, 0)
 
 
-def _lrd(
-    name, range_items, doc, minimum, maximum, bits, formatter
-):
-    low, high = _normalize_range(range_items, minimum, maximum)
-    return LabelledRangeDescription(low, high, name, formatter, doc)
+Raw = RawDescription()
 
 
-def _fd(
-    flag_items, doc, minimum, maximum, bits, formatter
-):
-    if len(flag_items) != bits:
-        raise ValueError(
-            f'expected {bits} flags, got {len(flag_items)}'
-        )
-    return FlagsDescription(flag_items, doc)
+class EnumDescriptionLSM:
+    """Helper used by TypeDescriptionLSM."""
+    def __init__(self, doc):
+        self.ranges = []
+        self.doc = doc
 
 
-def description_maker(line_tokens, doc):
-    """Creates a factory that will create a Description using deferred info.
-    line_tokens -> tokenized line from the config file.
-    doc -> associated doc lines.
-    The factory expects the following parameters:
-    minimum -> lowest describable value.
-    maximum -> highest describable value.
-    bits -> number of bits used to represent the value.
-    formatter -> preferred formatting function for int->str conversion."""
-    if len(line_tokens) != 1:
-        raise ValueError('field description must be a single token')
-    items = [t.strip() for t in line_tokens[0].split(':')]
-    if not any(_is_number_or_blank(i) for i in items):
-        return partial(_fd, items, doc)
-    elif _is_number_or_blank(items[0]):
-        return partial(_rd, items, doc)
-    else:
-        name, *items = items
-        return partial(_lrd, name, items, doc)
+    def add_line(self, line_tokens, doc):
+        self.doc.extend(doc)
+        values, *label = line_tokens
+        low, high = parts_of(values, ':', 1, 2, False)
+        if high is None:
+            high = low
+        if len(label) > 1:
+            raise ValueError('Label must be a single token (use [])')
+        elif len(label) == 0:
+            label = None
+        else:
+            label = label[0]
+        self.ranges.append((int(low, 0), int(high, 0), label))
+
+
+    def result(self):
+        return EnumDescription(self.ranges, self.doc)
+
+
+class FlagsDescriptionLSM:
+    """Helper used by TypeDescriptionLSM."""
+    def __init__(self, doc):
+        self.names = []
+        self.doc = doc
+
+
+    def add_line(self, line_tokens, doc):
+        self.doc.extend(doc)
+        assert len(line_tokens) > 0 # empty lines were preprocessed out.
+        if len(line_tokens) > 1:
+            raise ValueError('Flag must be a single token (use [])')
+        self.names.append(line_tokens[0])
+
+
+    def result(self):
+        return FlagsDescription(self.names, self.doc)

@@ -31,7 +31,7 @@ def _struct_info(member_data, alignment):
         tuple(offsets), tuple(members)
     )
 
-    
+
 class Struct:
     def __init__(self, member_data, alignment, doc):
         self.pattern, self.template, self.offsets, self.members = _struct_info(
