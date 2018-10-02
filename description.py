@@ -3,9 +3,8 @@ from functools import partial
 
 
 class EnumDescription:
-    def __init__(self, ranges, doc):
+    def __init__(self, ranges):
         self.ranges = ranges
-        self.doc = doc # Unused for now.
 
 
     def _format_enum(self, value, numeric_formatter, low, high, label):
@@ -71,9 +70,8 @@ class EnumDescription:
 
 
 class FlagsDescription:
-    def __init__(self, names, doc):
+    def __init__(self, names):
         self.names = names
-        self.doc = doc # Unused for now.
 
 
     def format(self, value, numeric_formatter):
@@ -118,13 +116,11 @@ Raw = RawDescription()
 
 class EnumDescriptionLSM:
     """Helper used by TypeDescriptionLSM."""
-    def __init__(self, doc):
+    def __init__(self):
         self.ranges = []
-        self.doc = doc
 
 
-    def add_line(self, line_tokens, doc):
-        self.doc.extend(doc)
+    def add_line(self, line_tokens):
         values, *label = line_tokens
         low, high = parts_of(values, ':', 1, 2, False)
         if high is None:
@@ -139,18 +135,16 @@ class EnumDescriptionLSM:
 
 
     def result(self):
-        return EnumDescription(self.ranges, self.doc)
+        return EnumDescription(self.ranges)
 
 
 class FlagsDescriptionLSM:
     """Helper used by TypeDescriptionLSM."""
-    def __init__(self, doc):
+    def __init__(self):
         self.names = []
-        self.doc = doc
 
 
-    def add_line(self, line_tokens, doc):
-        self.doc.extend(doc)
+    def add_line(self, line_tokens):
         assert len(line_tokens) > 0 # empty lines were preprocessed out.
         if len(line_tokens) > 1:
             raise ValueError('Flag must be a single token (use [])')
@@ -158,4 +152,4 @@ class FlagsDescriptionLSM:
 
 
     def result(self):
-        return FlagsDescription(self.names, self.doc)
+        return FlagsDescription(self.names)

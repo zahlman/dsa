@@ -50,11 +50,8 @@ def format_line(tokens):
 
 
 def process(lines):
-    position, indent, line, doc = 0, '', '', []
+    position, indent, line = 0, '', ''
     for i, raw_line in enumerate(lines, 1):
-        if raw_line.strip().startswith('##'):
-            doc.append(raw_line.strip()[2:].strip())
-            continue
         raw_line, mark, comment = raw_line.partition('#')
         raw_line = raw_line.rstrip()
         if not raw_line:
@@ -65,10 +62,14 @@ def process(lines):
             line += contents[1:]
             continue
         # If we get here, we have a new "real" line.
-        yield position, indent, tokenize(line), doc
-        position, indent, line, doc = i, raw_indent, raw_line, []
+        # As long as we weren't at the start of the file, yield the old line.
+        if line:
+            yield position, indent, tokenize(line)
+        else:
+            assert position == 0
+        position, indent, line = i, raw_indent, raw_line
     # At EOF, yield the final chunk.
-    yield position, indent, tokenize(line), doc
+    yield position, indent, tokenize(line)
 
 
 def get_file(paths, name):
@@ -89,9 +90,9 @@ def library(paths):
 # Separating this out allows for testing from hard-coded `lines`.
 def create(new_state_machine, lines, name):
     machine = new_state_machine()
-    for position, indent, line_tokens, doc in lines:
+    for position, indent, line_tokens in lines:
         try:
-            machine.add_line(position, indent, line_tokens, doc)
+            machine.add_line(position, indent, line_tokens)
         except ValueError as e:
             raise ValueError(f'Line {position}: {e}')
     return machine.result(name)

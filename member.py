@@ -3,9 +3,10 @@ from functools import partial
 
 
 class Option:
-    def __init__(self, offsets, fields, fixed_mask, fixed_value, size):
+    def __init__(self, offsets, fields, names, fixed_mask, fixed_value, size):
         self.offsets = offsets
         self.fields = fields
+        self.names = names
         self.fixed_mask = fixed_mask
         self.fixed_value = fixed_value
         self.size = size
@@ -24,9 +25,11 @@ class Option:
         return [
             field.format(
                 (full_value >> offset) & ((1 << field.size) - 1),
-                disassembler, member_name
+                disassembler, f'{member_name}_{name}'
             )
-            for offset, field in zip(self.offsets, self.fields)
+            for offset, field, name in zip(
+                self.offsets, self.fields, self.names
+            )
         ]
 
 
@@ -70,12 +73,11 @@ def _build_option_map(options):
 
 
 class Member:
-    def __init__(self, typename, options, doc):
+    def __init__(self, typename, options):
         # member "name" will be handled at the struct level.
         self.typename = typename
         self.options = options
         self.size, self.option_map = _build_option_map(options)
-        self.doc = doc # Unused for now.
 
 
     def format(self, value, disassembler, name):
@@ -100,19 +102,19 @@ class Member:
 
 
 class OptionLSM:
-    def __init__(self, doc):
+    def __init__(self):
         self.field_makers = []
-        self.doc = doc # will be ignored...
 
 
-    def add_line(self, line_tokens, doc):
-        self.field_makers.append(partial(make_field, line_tokens, doc))
+    def add_line(self, line_tokens):
+        self.field_makers.append(partial(make_field, line_tokens))
 
 
     def result(self, description_lookup):
-        position, offsets, fields, fixed_mask, fixed_value = 0, [], [], 0, 0
+        position, fixed_mask, fixed_value = 0, 0, 0
+        offsets, fields, names = [], [], []
         for maker in self.field_makers:
-            field, fixed, bits = maker(description_lookup)
+            name, field, fixed, bits = maker(description_lookup)
             if fixed is not None:
                 mask = (1 << bits) - 1
                 fixed_mask |= mask << position
@@ -121,27 +123,29 @@ class OptionLSM:
             else:
                 offsets.append(position)
                 fields.append(field)
+                names.append(name)
             position += bits
-        if position % 8:
+        size, remainder = divmod(position, 8)
+        if remainder:
             raise ValueError('option size must be a multiple of 8 bits')
-        return Option(offsets, fields, fixed_mask, fixed_value, position // 8)
+        return Option(
+            offsets, fields, names, fixed_mask, fixed_value, size
+        )
 
 
 class MemberLSM:
-    def __init__(self, doc):
+    def __init__(self):
         self.option_names = []
-        self.doc = doc
 
 
-    def add_line(self, line_tokens, doc):
-        self.doc.extend(doc)
+    def add_line(self, line_tokens):
         name, *junk = line_tokens
         if junk:
             raise ValueError('junk data after option name')
         self.option_names.append(name)
 
 
-    def result(self, option_lookup):
+    def result(self, typename, option_lookup):
         return Member(
-            'FIXME', [option_lookup[o] for o in self.option_names], self.doc
+            typename, [option_lookup[o] for o in self.option_names]
         )

@@ -60,14 +60,12 @@ class FieldTranslation:
 
 class Field:
     def __init__(
-        self, name, translation, formatter, description, referent, doc
+        self, translation, formatter, description, referent
     ):
-        self.name = name
         self.translation = translation
         self.formatter = formatter
         self.description = description
         self.referent = referent
-        self.doc = doc
 
 
     @property
@@ -75,41 +73,31 @@ class Field:
         return self.translation.size
 
 
-    def throw(self, msg):
-        raise ValueError(f'Field {self.name}: {msg}')
-
-
     # When formatting, exceptions are not raised at this level, since some
     # source data might only be formattable by certain Options. Instead, we
     # return `None` and let the Member iterate to an Option that works.
-    def format(self, raw, disassembler, member_name):
+    def format(self, raw, disassembler, name):
         value = self.translation.value(raw)
         result = self.description.format(value, self.formatter)
         if result is None or self.referent is None:
             return result
         # If we have a valid pointer, inform the disassembler about it,
         # and get a label name from there.
-        name = self.name
-        name = member_name if name is None else f'{member_name}_{name}'
         return '@' + disassembler.add(self.referent, value, name)
 
 
     def parse(self, text):
         # TODO: handle referent labels.
-        try:
-            result = self.description.parse(text)
-            if result is not None:
-                result = self.translation.raw(result)
-            return result
-        except ValueError as e:
-            self.throw(e)
+        result = self.description.parse(text)
+        if result is not None:
+            result = self.translation.raw(result)
+        return result
 
 
-def make_field(line_tokens, doc, description_lookup):
+def make_field(line_tokens, description_lookup):
     """Creates a factory that will create a Field later, along with the
     `fixed` value (or None) that it will parse later, and the field size.
     line_tokens -> tokenized line from the config file.
-    doc -> associated doc lines.
 
     The factory expects the following parameters:
     description -> resolved Description object for the field."""
@@ -135,12 +123,9 @@ def make_field(line_tokens, doc, description_lookup):
     except KeyError:
         description = Raw
     referent = params.get('referent', None)
-    field = Field(
-        name, translation, params.get('base', hex),
-        description, referent, doc
-    )
+    field = Field(translation, params.get('base', hex), description, referent)
     if fixed is not None:
         if referent is not None:
             raise ValueError('fixed field may not have a referent')
         fixed = field.parse(fixed)
-    return field, fixed, bits
+    return name, field, fixed, bits

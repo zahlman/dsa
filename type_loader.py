@@ -29,18 +29,18 @@ class TypeDescriptionLSM:
         }[section_type]
 
 
-    def _continue_block(self, line_tokens, doc):
+    def _continue_block(self, line_tokens):
         if self.current_section is None:
             raise ValueError(f'indented line outside block')
-        self.current_section.add_line(line_tokens, doc)
+        self.current_section.add_line(line_tokens)
 
 
-    def _next_block(self, line_tokens, doc):
+    def _next_block(self, line_tokens):
         try:
             section_type, name = line_tokens
         except ValueError:
             raise ValueError(f'invalid section header')
-        section = self._get_loader(section_type)(doc)
+        section = self._get_loader(section_type)()
         container = self._get_dict(section_type)
         if name in container:
             raise ValueError(
@@ -50,19 +50,8 @@ class TypeDescriptionLSM:
         self.current_section = section
 
 
-    def _add_line_raw(self, indent, line_tokens, doc):
-        if indent:
-            self._continue_block(line_tokens, doc)
-        else:
-            self._next_block(line_tokens, doc)
-
-
-    def add_line(self, position, indent, line_tokens, doc):
-        try:
-            if position != 0:
-                self._add_line_raw(indent, line_tokens, doc)
-        except ValueError as e:
-            raise ValueError(f'Line {position}: {e}')
+    def add_line(self, position, indent, line_tokens):
+        (self._continue_block if indent else self._next_block)(line_tokens)
 
 
     def result(self, name):
@@ -75,6 +64,6 @@ class TypeDescriptionLSM:
             for name, lsm in self.options.items()
         }
         return {
-            name: lsm.result(option_lookup)
+            name: lsm.result(name, option_lookup)
             for name, lsm in self.types.items()
         }
