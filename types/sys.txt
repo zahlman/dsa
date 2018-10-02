@@ -1,0 +1,69 @@
+type quad
+    four_bytes
+    two_pairs
+    quad
+
+type squad
+    four_sbytes
+    two_spairs
+    squad
+
+type pair
+    two_bytes
+    pair
+
+type spair
+    two_sbytes
+    spair
+
+type byte
+    byte
+
+type sbyte
+    sbyte
+
+option four_bytes
+    8:w
+    8:x
+    8:y
+    8:z
+
+option four_sbytes
+    8:w signed
+    8:x signed
+    8:y signed
+    8:z signed
+
+option two_bytes
+    8:m
+    8:n
+
+option two_sbytes
+    8:m signed
+    8:n signed
+
+option byte
+    8:value
+
+option sbyte
+    8:value signed
+
+option two_pairs
+    16:x
+    16:y
+
+option two_spairs
+    16:x signed
+    16:y signed
+
+option pair
+    16:value
+
+option spair
+    16:value signed
+
+option quad
+    32:value
+
+option squad
+    32:value signed
