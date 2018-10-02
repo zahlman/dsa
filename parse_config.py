@@ -25,7 +25,8 @@ def parts_of(token, separator, required, allowed, last_list):
     if count < required:
         raise ValueError('not enough parts for multipart token')
     elif count < allowed:
-        parts.extend([None] * (allowed - count))
+        padding = allowed - count - (1 if last_list else 0)
+        parts.extend([None] * padding)
     if last_list: # group up the last token, even if padding occurred.
         parts = parts[:allowed-1] + [parts[allowed-1:]]
     elif count > allowed:
