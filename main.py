@@ -1,4 +1,4 @@
-from parse_config import cached_loader
+from parse_config import load_globs
 from type_loader import TypeDescriptionLSM
 from structgroup_loader import StructGroupDescriptionLSM
 from functools import partial
@@ -13,13 +13,13 @@ def _verify(x, y, where):
 
 
 class Disassembler:
-    def __init__(self, load_group, root, location, label_base):
+    def __init__(self, structgroups, root, location, label_base):
         self.labels = {} # position -> label
         self.used_groups = {} # position -> name of structgroup
         self.sizes = {} # position -> size of chunk data
         self.chunks = {} # position -> disassembled chunk
         self.pending_groups = {} # position -> name of structgroup
-        self.load_group = load_group
+        self.all_groups = structgroups # name -> StructGroup instance
         self.add(root, location, label_base)
 
 
@@ -71,9 +71,8 @@ class Disassembler:
         location = next(iter(self.pending_groups.keys()))
         group_name = self.pending_groups.pop(location)
         try:
-            # N.B. Passed-in function, not a method!
-            group = self.load_group(group_name)
-        except FileNotFoundError: # skip chunk for unknown group
+            group = self.all_groups[group_name]
+        except KeyError: # skip chunk for unknown group
             print(f'Warning: skipping chunk of unknown type {group_name}')
             #raise
         else:
@@ -109,21 +108,14 @@ class Disassembler:
             self._dump(outfile)
 
 
-def make_structgroup_loader(
-    type_paths=('types',), struct_paths=('structgroups',)
-):
-    load_type = cached_loader(TypeDescriptionLSM, type_paths)
-    return cached_loader(
-        partial(StructGroupDescriptionLSM, load_type), struct_paths
-    )
-
-
 def test(
-    group_name, infilename, outfilename, type_paths, struct_paths, position
+    group_name, infilename, outfilename, position,
+    lib_types, usr_types, lib_structs, usr_structs
 ):
     with open(infilename, 'rb') as f:
         data = f.read()
-    Disassembler(
-        make_structgroup_loader(type_paths, struct_paths),
-        group_name, position, 'main'
-    )(data, outfilename)
+    types = load_globs(TypeDescriptionLSM(), lib_types, usr_types)
+    structgroups = load_globs(
+        StructGroupDescriptionLSM(types), lib_structs, usr_structs
+    )
+    Disassembler(structgroups, group_name, position, 'main')(data, outfilename)

@@ -1,43 +1,38 @@
 import re
 
 
-def _struct_info(member_data, alignment):
-    pattern = bytearray()
-    # The template value is "write-only"; the non-fixed bytes of the
-    # bytearray will be replaced each time and are meaningless except
-    # when a copy is made by `parse`.
-    template = bytearray()
-    offsets = []
-    members = []
-    position = 0
-    for member, fixed in member_data:
-        size = member.size
-        if fixed is None:
-            offsets.append(position)
-            members.append(member)
-            pattern.extend(b'(' + (b'.' * size) + b')')
-            template.extend(bytes(size))
-        else:
-            assert len(fixed) == size
-            pattern.extend(re.escape(fixed))
-            template.extend(fixed)
-        position += size
-    assert position == len(template)
-    padding = -position % alignment
-    pattern.extend(b'.' * padding)
-    template.extend(bytes(padding))
-    return (
-        re.compile(bytes(pattern), re.DOTALL), template,
-        tuple(offsets), tuple(members)
-    )
-
-
 class Struct:
-    def __init__(self, member_data, alignment, doc):
-        self.pattern, self.template, self.offsets, self.members = _struct_info(
-            member_data, alignment
-        )
-        self.doc = doc # Unused for now.
+    def __init__(self, member_data, alignment):
+        pattern = bytearray()
+        # The template value is "write-only"; the non-fixed bytes of the
+        # bytearray will be replaced each time and are meaningless except
+        # when a copy is made by `parse`.
+        self.template = bytearray()
+        offsets = []
+        members = []
+        names = []
+        position = 0
+        for member, name, fixed in member_data:
+            size = member.size
+            if fixed is None:
+                offsets.append(position)
+                members.append(member)
+                names.append(name)
+                pattern.extend(b'(' + (b'.' * size) + b')')
+                self.template.extend(bytes(size))
+            else:
+                assert len(fixed) == size
+                pattern.extend(re.escape(fixed))
+                self.template.extend(fixed)
+            position += size
+        assert position == len(self.template)
+        padding = -position % alignment
+        pattern.extend(b'.' * padding)
+        self.template.extend(bytes(padding))
+        self.pattern = re.compile(bytes(pattern), re.DOTALL)
+        self.offsets = tuple(offsets)
+        self.members = tuple(members)
+        self.names = tuple(names)
 
 
     def format_from(self, source, position, disassembler):
@@ -46,8 +41,10 @@ class Struct:
             # This struct wasn't matched, but maybe another one will be.
             return None
         return tuple(
-            member.format(value, disassembler)
-            for member, value in zip(self.members, match.groups())
+            member.format(value, disassembler, name)
+            for member, name, value in zip(
+                self.members, self.names, match.groups()
+            )
         ), len(self.template)
 
 
@@ -84,14 +81,13 @@ def _normalized_graph(graph, first):
 
 class StructGroup:
     def __init__(
-        self, structs, doc, graph,
+        self, structs, graph,
         first=None, align=4, endian='little', size=None
     ):
         self.structs = structs # TODO: optimized dispatch
         self.alignment = align
         self.endian = endian # TODO: implement big-endian
         self.size = size
-        self.doc = doc # Unused for now.
         self.graph = _normalized_graph(graph, first)
 
 

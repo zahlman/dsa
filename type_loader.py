@@ -4,6 +4,10 @@ from member import OptionLSM, MemberLSM
 
 class TypeDescriptionLSM:
     def __init__(self):
+        self._reset()
+
+
+    def _reset(self):
         self.current_section = None
         self.values = {}
         self.options = {}
@@ -53,7 +57,9 @@ class TypeDescriptionLSM:
         (self._continue_block if indent else self._next_block)(line_tokens)
 
 
-    def result(self):
+    def end_file(self, label, accumulator):
+        # `label` is ignored; we don't care what source the data came from.
+        # Add all Member objects to the accumulator.
         description_lookup = {
             name: lsm.result()
             for name, lsm in self.values.items()
@@ -62,7 +68,8 @@ class TypeDescriptionLSM:
             name: lsm.result(description_lookup)
             for name, lsm in self.options.items()
         }
-        return {
-            name: lsm.result(name, option_lookup)
-            for name, lsm in self.types.items()
-        }
+        for name, lsm in self.types.items():
+            if name in accumulator:
+                raise ValueError(f'duplicate definition for type `{name}`')
+            accumulator[name] = lsm.result(name, option_lookup)
+        self._reset()

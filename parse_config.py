@@ -74,7 +74,7 @@ def process(lines):
 
 def glob_files(patterns, base):
     for pattern in patterns:
-        for filename in glob.glob(os.path.join(base, pattern)):
+        for filename in glob.glob(os.path.join(base, pattern), recursive=True):
             yield os.path.abspath(filename)
 
 
@@ -83,23 +83,27 @@ def resolve_filenames(lib_globs, usr_globs):
     yield from glob_files(usr_globs, os.getcwd())
 
 
-def feed(source_name, machine, lines):
+def feed(source_name, label, accumulator, machine, lines):
     print("Loading:", source_name)
     for position, indent, line_tokens in lines:
         try:
             machine.add_line(indent, line_tokens)
         except ValueError as e:
             raise ValueError(f'{source_name}: Line {position}: {e}')
+    machine.end_file(label, accumulator)
 
 
 def load_globs(machine, lib_globs, usr_globs):
+    accumulator = {}
     for filename in resolve_filenames(lib_globs, usr_globs):
+        label = os.path.splitext(os.path.basename(filename))[0]
         with open(filename) as f:
-            feed(f"File '{filename}'", machine, process(f))
-    return machine.result()
+            feed(f"File '{filename}'", label, accumulator, machine, process(f))
+    return accumulator
 
 
 # Interface for testing.
 def load_lines(machine, lines):
-    feed("String data", machine, lines)
-    return machine.result()
+    accumulator = {}
+    feed("String data", None, accumulator, machine, lines)
+    return accumulator

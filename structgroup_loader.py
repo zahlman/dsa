@@ -1,5 +1,5 @@
 from arguments import boolean, parameters, positive_integer, one_of
-from parse_config import cached_loader, parts_of, process
+from parse_config import parts_of
 from structs import Struct, StructGroup
 from collections import OrderedDict
 
@@ -28,7 +28,6 @@ def parse_struct_header(line_tokens):
 class StructData:
     def __init__(self, line_tokens, alignment):
         self.name, self.followers = parse_struct_header(line_tokens)
-        self.struct_doc = []
         self.member_data = []
         self.alignment = alignment
 
@@ -36,34 +35,38 @@ class StructData:
     def create(self):
         return (
             self.name,
-            Struct(self.member_data, self.alignment, self.struct_doc),
+            Struct(self.member_data, self.alignment),
             self.followers
         )
 
 
-    def add_member(self, line_tokens, doc, load_type):
-        self.struct_doc.append(doc)
+    def add_member(self, line_tokens, types):
         tnf, *options = line_tokens
         typename, name, fixed = parts_of(tnf, ':', 1, 3, False)
         if fixed is None and name is None:
             raise ValueError(f'member must have either a name or a fixed value')
         if fixed is not None and name is not None:
             raise ValueError(f'member with fixed value may not be named')
-        member_maker, whitelist = load_type(typename)
-        member = member_maker(parameters(whitelist, options), name)
+        try:
+            member = types[typename]
+        except KeyError:
+            raise ValueError(f'unrecognized type {typename}')
         if fixed is not None:
             fixed = member.parse(fixed)
-        self.member_data.append((member, fixed))
+        self.member_data.append((member, name, fixed))
 
 
 class StructGroupDescriptionLSM:
-    def __init__(self, load_type):
-        self.group_doc = []
+    def __init__(self, types):
+        self.types = types
+        self._reset()
+
+
+    def _reset(self):
         self.structs = OrderedDict()
         self.options = None
         self.struct_data = None
         self.graph = OrderedDict()
-        self.load_type = load_type
 
 
     def _push_old_struct(self):
@@ -77,29 +80,35 @@ class StructGroupDescriptionLSM:
         self.struct_data = None
 
 
-    def add_line(self, position, indent, line_tokens, doc):
-        if position == 0: # group-level documentation
-            self.group_doc.append(doc)
-            return
-        if indent: # middle of a struct definition
-            if self.struct_data is None:
-                raise ValueError('member definition outside of struct')
-            self.struct_data.add_member(line_tokens, doc, self.load_type)
-            return
-        if self.options is None: # header
-            self.options = parse_options(line_tokens)
-            return
-        # Otherwise: beginning of a new struct.
+    def _continue_struct(self, line_tokens):
+        if self.struct_data is None:
+            raise ValueError('member definition outside of struct')
+        self.struct_data.add_member(line_tokens, self.types)
+
+
+    def _new_struct(self, line_tokens):
         self._push_old_struct()
         self.struct_data = StructData(line_tokens, self.options.get('align', 1))
 
 
-    def result(self, name):
+    def add_line(self, indent, line_tokens):
+        if indent:
+            self._continue_struct(line_tokens)
+        elif self.options is None:
+            self.options = parse_options(line_tokens)
+        else:
+            self._new_struct(line_tokens)
+
+
+    def end_file(self, label, accumulator):
         if self.options is None:
             raise ValueError('empty struct group definition (no option line)')
         self._push_old_struct()
         if not self.structs:
             raise ValueError('empty struct group definition (no structs)')
-        return StructGroup(
-            self.structs, self.group_doc, self.graph, **self.options
+        if label in accumulator:
+            raise ValueError(f'duplicate definition for struct group `{label}`')
+        accumulator[label] = StructGroup(
+            self.structs, self.graph, **self.options
         )
+        self._reset()
