@@ -1,5 +1,5 @@
 from functools import lru_cache, partial
-import os, re, textwrap
+import glob, os, re, textwrap
 
 
 token = re.compile('(?:\[[^\[\]]*\])|(?:[^ \t\[\]]+)')
@@ -72,37 +72,36 @@ def process(lines):
     yield position, indent, tokenize(line)
 
 
-def get_file(paths, name):
-    for folder in paths:
-        try:
-            filename = os.path.join(folder, f'{name}.txt')
-            with open(filename) as f:
-                return list(process(f))
-        except FileNotFoundError: # local open() failed; try another path.
-            continue
-    raise FileNotFoundError(f'no valid path contained {name}.txt')
+def glob_files(patterns, base):
+    for pattern in patterns:
+        for filename in glob.glob(os.path.join(base, pattern)):
+            yield os.path.abspath(filename)
 
 
-def library(paths):
-    return lru_cache(None)(partial(get_file, paths))
+def resolve_filenames(lib_globs, usr_globs):
+    yield from glob_files(lib_globs, os.path.split(__file__)[0])
+    yield from glob_files(usr_globs, os.getcwd())
 
 
-# Separating this out allows for testing from hard-coded `lines`.
-def create(new_state_machine, lines, name):
-    machine = new_state_machine()
+def feed(source_name, machine, lines):
+    print("Loading:", source_name)
     for position, indent, line_tokens in lines:
         try:
             machine.add_line(position, indent, line_tokens)
         except ValueError as e:
-            raise ValueError(f'Line {position}: {e}')
-    return machine.result(name)
+            raise ValueError(f'{source_name}: Line {position}: {e}')
 
 
-def load(new_state_machine, get_file, name):
-    return create(new_state_machine, get_file(name), name)
+def load_globs(new_state_machine, lib_globs, usr_globs):
+    machine = new_state_machine()
+    for filename in resolve_filenames(lib_globs, usr_globs):
+        with open(filename) as f:
+            feed(f"File '{filename}'", machine, process(f))
+    return machine.result()
 
 
-# While it's true that the underlying file could change between calls, we would
-# actually prefer to ignore such changes.
-def cached_loader(new_state_machine, paths):
-    return lru_cache(None)(partial(load, new_state_machine, library(paths)))
+# Interface for testing.
+def load_lines(new_state_machine, lines):
+    machine = new_state_machine()
+    feed("String data", machine, lines)
+    return machine.result()

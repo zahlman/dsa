@@ -1,6 +1,5 @@
 from description import EnumDescriptionLSM, FlagsDescriptionLSM
 from member import OptionLSM, MemberLSM
-from parse_config import cached_loader
 
 
 class TypeDescriptionLSM:
@@ -54,7 +53,7 @@ class TypeDescriptionLSM:
         (self._continue_block if indent else self._next_block)(line_tokens)
 
 
-    def result(self, name):
+    def result(self):
         description_lookup = {
             name: lsm.result()
             for name, lsm in self.values.items()
