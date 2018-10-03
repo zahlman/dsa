@@ -87,13 +87,12 @@ def feed(source_name, machine, lines):
     print("Loading:", source_name)
     for position, indent, line_tokens in lines:
         try:
-            machine.add_line(position, indent, line_tokens)
+            machine.add_line(indent, line_tokens)
         except ValueError as e:
             raise ValueError(f'{source_name}: Line {position}: {e}')
 
 
-def load_globs(new_state_machine, lib_globs, usr_globs):
-    machine = new_state_machine()
+def load_globs(machine, lib_globs, usr_globs):
     for filename in resolve_filenames(lib_globs, usr_globs):
         with open(filename) as f:
             feed(f"File '{filename}'", machine, process(f))
@@ -101,7 +100,6 @@ def load_globs(new_state_machine, lib_globs, usr_globs):
 
 
 # Interface for testing.
-def load_lines(new_state_machine, lines):
-    machine = new_state_machine()
+def load_lines(machine, lines):
     feed("String data", machine, lines)
     return machine.result()

@@ -49,7 +49,7 @@ class TypeDescriptionLSM:
         self.current_section = section
 
 
-    def add_line(self, position, indent, line_tokens):
+    def add_line(self, indent, line_tokens):
         (self._continue_block if indent else self._next_block)(line_tokens)
 
 
