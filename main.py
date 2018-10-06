@@ -3,6 +3,7 @@ from type_loader import TypeDescriptionLSM
 from structgroup_loader import StructGroupDescriptionLSM
 from functools import partial
 from itertools import count
+from time import time
 
 
 def _verify(x, y, where):
@@ -108,14 +109,27 @@ class Disassembler:
             self._dump(outfile)
 
 
+def timed(action, *args):
+    t = time()
+    result = action(*args)
+    elapsed = time() - t
+    print(f'({elapsed} s)')
+    return result
+
+
 def test(
     group_name, infilename, outfilename, position,
     lib_types, usr_types, lib_structs, usr_structs
 ):
     with open(infilename, 'rb') as f:
         data = f.read()
-    types = load_globs(TypeDescriptionLSM(), lib_types, usr_types)
-    structgroups = load_globs(
+    print('Loading types...')
+    types = timed(load_globs, TypeDescriptionLSM(), lib_types, usr_types)
+    print('Loading language...')
+    structgroups = timed(load_globs,
         StructGroupDescriptionLSM(types), lib_structs, usr_structs
     )
-    Disassembler(structgroups, group_name, position, 'main')(data, outfilename)
+    print('Setting up...')
+    d = timed(Disassembler, structgroups, group_name, position, 'main')
+    print('Disassembling...')
+    timed(d, data, outfilename)
