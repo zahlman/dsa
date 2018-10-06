@@ -1,20 +1,20 @@
 type Quad
-    four_bytes
-    two_pairs
     quad
+    two_pairs
+    four_bytes
 
 type Squad
-    four_sbytes
-    two_spairs
     squad
+    two_spairs
+    four_sbytes
 
 type Pair
-    two_bytes
     pair
+    two_bytes
 
 type Spair
-    two_sbytes
     spair
+    two_sbytes
 
 type Byte
     byte
