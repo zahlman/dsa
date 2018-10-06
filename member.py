@@ -3,10 +3,9 @@ from functools import partial
 
 
 class Option:
-    def __init__(self, offsets, fields, names, fixed_mask, fixed_value, size):
+    def __init__(self, offsets, fields, fixed_mask, fixed_value, size):
         self.offsets = offsets
         self.fields = fields
-        self.names = names
         self.fixed_mask = fixed_mask
         self.fixed_value = fixed_value
         self.size = size
@@ -25,10 +24,10 @@ class Option:
         return [
             field.format(
                 (full_value >> offset) & ((1 << field.size) - 1),
-                disassembler, f'{member_name}_{name}'
+                disassembler, f'{member_name}'
             )
-            for offset, field, name in zip(
-                self.offsets, self.fields, self.names
+            for offset, field in zip(
+                self.offsets, self.fields
             )
         ]
 
@@ -112,7 +111,7 @@ class OptionLSM:
 
     def result(self, description_lookup):
         position, fixed_mask, fixed_value = 0, 0, 0
-        offsets, fields, names = [], [], []
+        offsets, fields = [], []
         for maker in self.field_makers:
             name, field, fixed, bits = maker(description_lookup)
             if fixed is not None:
@@ -123,13 +122,12 @@ class OptionLSM:
             else:
                 offsets.append(position)
                 fields.append(field)
-                names.append(name)
             position += bits
         size, remainder = divmod(position, 8)
         if remainder:
             raise ValueError('option size must be a multiple of 8 bits')
         return Option(
-            offsets, fields, names, fixed_mask, fixed_value, size
+            offsets, fields, fixed_mask, fixed_value, size
         )
 
 
