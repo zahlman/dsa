@@ -1,5 +1,24 @@
 from parse_config import parts_of
+import binascii
 from functools import partial
+
+
+def parameters(whitelist, tokens):
+    result = {}
+    specified = set()
+    for token in tokens:
+        name, item = parts_of(token, ':', 1, 2, True)
+        if not item: # Shortcut for boolean flags
+            item = ['True']
+        if name in specified:
+            raise ValueError(f"duplicate specification of parameter '{name}'")
+        specified.add(name)
+        try:
+            converter = whitelist[name]
+        except KeyError:
+            raise ValueError(f"unrecognized parameter '{name}'")
+        result[name] = converter(item)
+    return result
 
 
 # "types" for flag values.
@@ -50,19 +69,9 @@ def base(items):
         )
 
 
-def parameters(whitelist, tokens):
-    result = {}
-    specified = set()
-    for token in tokens:
-        name, item = parts_of(token, ':', 1, 2, True)
-        if not item: # Shortcut for boolean flags
-            item = ['True']
-        if name in specified:
-            raise ValueError(f"duplicate specification of parameter '{name}'")
-        specified.add(name)
-        try:
-            converter = whitelist[name]
-        except KeyError:
-            raise ValueError(f"unrecognized parameter '{name}'")
-        result[name] = converter(item)
-    return result
+def hexdump(items):
+    text = string(items)
+    try:
+        return binascii.unhexlify(''.join(text.split()))
+    except binascii.Error:
+        raise ValueError(f'invalid terminator format')
