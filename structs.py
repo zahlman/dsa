@@ -82,13 +82,19 @@ def _normalized_graph(graph, first):
 class StructGroup:
     def __init__(
         self, structs, graph,
-        first=None, align=4, endian='little', size=None
+        first=None, align=4, endian='little', size=None, terminator=None
     ):
         self.structs = structs # TODO: optimized dispatch
         self.alignment = align
         self.endian = endian # TODO: implement big-endian
         self.size = size
+        self.terminator = terminator
         self.graph = _normalized_graph(graph, first)
+
+
+    @property
+    def terminator_size(self):
+        return 0 if self.terminator is None else len(self.terminator)
 
 
     def check_alignment(self, position):
@@ -98,19 +104,49 @@ class StructGroup:
             )
 
 
-    def format_from(self, source, position, previous, count, disassembler):
-        if count == self.size:
-            # We may not have reached a terminator, but that's OK.
-            return None # reached end
-        candidates = self.graph[previous]
-        if not candidates:
-            # If this block is counted, ensure count was made up.
-            if self.size is None:
-                return None
-            missing = self.size - count
+    def _remaining(self, count):
+        return None if self.size is None else self.size - count
+
+
+    def _at_end(self, source, position):
+        t = self.terminator
+        if t is None:
+            return False
+        return t == source[position:position+len(t)]
+
+
+    def _candidates(self, source, position, previous, count):
+        if self._at_end(source, position):
+            # N.B. If there are `last` structs in the group and we didn't
+            # reach one, this is *not* considered an error.
+            result = set()
+        else:
+            result = self.graph[previous]
+            if self.terminator is not None and not result:
+                raise ValueError(
+                    f'missing terminator after `{previous}` struct'
+                )
+        # Validate against count, if applicable.
+        remaining = self._remaining(count)
+        if not result and (remaining not in {0, None}):
             raise ValueError(
-                f'premature end of chunk; {missing} struct(s) missing'
+                f'premature end of chunk; {remaining} struct(s) missing'
             )
+        if result and remaining == 0:
+            if self.terminator is not None:
+                raise ValueError(
+                    f'missing terminator after {count} struct(s)'
+                )
+            # Otherwise: end of counted block, and last struct was not `last`;
+            # this is not an error, but we stop formatting here.
+            result = set()
+        return result
+
+
+    def format_from(self, source, position, previous, count, disassembler):
+        candidates = self._candidates(source, position, previous, count)
+        if not candidates:
+            return None
         for name in candidates:
             struct = self.structs[name]
             try:

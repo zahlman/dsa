@@ -49,6 +49,7 @@ class Disassembler:
         for i in count():
             result = group.format_from(source, position, previous, i, self)
             if result is None:
+                position += group.terminator_size
                 break
             # TODO: possibly get new chunk requests here.
             previous, (tokens, size) = result

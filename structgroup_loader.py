@@ -1,4 +1,4 @@
-from arguments import boolean, parameters, positive_integer, one_of
+from arguments import boolean, hexdump, parameters, positive_integer, one_of
 from parse_config import parts_of
 from structs import Struct, StructGroup
 from collections import OrderedDict
@@ -8,8 +8,9 @@ def parse_options(line_tokens):
     return parameters({
         'align': positive_integer,
         'endian': one_of('big', 'little'),
+        'first': set,
         'size': positive_integer,
-        'first': set
+        'terminator': hexdump
     }, line_tokens)
 
 
