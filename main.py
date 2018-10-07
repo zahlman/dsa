@@ -91,7 +91,7 @@ class Disassembler:
         for line in chunk:
             outfile.write(f'{line}\n')
         outfile.write('}\n')
-        outfile.write('}\n')
+        outfile.write(f'}} # end:0x{location+size:X}\n')
 
 
     def _dump(self, outfile):
