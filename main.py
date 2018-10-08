@@ -118,19 +118,50 @@ def timed(action, *args):
     return result
 
 
-def test(
-    group_name, infilename, outfilename, position,
-    lib_types, usr_types, lib_structs, usr_structs
-):
-    with open(infilename, 'rb') as f:
-        data = f.read()
+def _load_paths(pathfile):
+    paths = {
+        'lib_types': [],
+        'usr_types': [],
+        'lib_structs': [],
+        'usr_structs': []
+    }
+    with open(pathfile) as f:
+        for line in f:
+            category, path = line.split()
+            if category not in paths:
+                raise ValueError('unrecognized path type {category}')
+            paths[category].append(path)
+    print("PATHS:", paths)
+    return paths
+
+
+def load_language(pathfile):
+    print('Reading path config file...')
+    paths = timed(_load_paths, pathfile)
     print('Loading types...')
-    types = timed(load_globs, TypeDescriptionLSM(), lib_types, usr_types)
-    print('Loading language...')
-    structgroups = timed(load_globs,
-        StructGroupDescriptionLSM(types), lib_structs, usr_structs
+    types = timed(
+        load_globs, TypeDescriptionLSM(),
+        paths['lib_types'], paths['usr_types']
     )
+    print('Loading language...')
+    return timed(
+        load_globs, StructGroupDescriptionLSM(types),
+        paths['lib_structs'], paths['usr_structs']
+    )
+
+
+def _get_data(source):
+    with open(source, 'rb') as f:
+        return f.read()
+
+
+def test(
+    group_name, infilename, outfilename, position, pathfile
+):
+    print('Loading binary...')
+    data = timed(_get_data, infilename)
+    language = load_language(pathfile)
     print('Setting up...')
-    d = timed(Disassembler, structgroups, group_name, position, 'main')
+    d = timed(Disassembler, language, group_name, position, 'main')
     print('Disassembling...')
     timed(d, data, outfilename)
