@@ -1,72 +1,98 @@
 from parse_config import parts_of
 from functools import partial
+import re
 
 
-class EnumDescription:
-    def __init__(self, ranges):
-        self.ranges = ranges
+class UnlabelledRange:
+    def __init__(self, low, high):
+        self.low, self.high = low, high
 
 
-    def _format_enum(self, value, numeric_formatter, low, high, label):
-        assert low <= value <= high
-        if label is None:
-            return numeric_formatter(value)
-        if low == high:
-            return label
-        return f'{label}({numeric_formatter(value - low)})'
-
-
-    def format(self, value, numeric_formatter):
-        try:
-            match = next(
-                (low, high, label)
-                for low, high, label in self.ranges
-                if low <= value <= high
-            )
-        except StopIteration:
-            raise ValueError(f'No valid format for value: {value}')
-        return self._format_enum(value, numeric_formatter, *match)
+    def format(self, value, convert):
+        return convert(value) if self.low <= value <= self.high else None
 
 
     def parse(self, text):
         try:
-            return next(
-                self._parse_enum(text, low, high, label)
-                for low, high, label in self.ranges
-                if self._ok_enum(text, low, high, label)
-            )
+            value = int(text, 0)
+            return value if self.low <= value <= self.high else None
+        except ValueError:
+            return None # might be matched by a LabelledRange!
+
+
+class LabelledRange:
+    def __init__(self, low, high, label):
+        self.low, self.high = low, high
+        self.label = label
+        self.pattern = re.compile(
+            f'(?:{re.escape(label)})(?:<(.*)>)?$'
+        )
+
+
+    def format(self, value, convert):
+        low, high, label = self.low, self.high, self.label
+        if not low <= value <= high:
+            return None
+        return label if low == high else f'{label}<{convert(value - low)}>'
+
+
+    def _convert_offset(self, param):
+        need_param = self.low != self.high
+        if param is None:
+            if need_param:
+                raise ValueError(
+                    'missing required parameter for labelled range'
+                )
+            return 0
+        if not need_param:
+            raise ValueError('labelled constant does not take a parameter')
+        try:
+            return int(param, 0)
+        except ValueError:
+            raise ValueError('labelled range parameter must be integer')
+
+
+    def parse(self, text):
+        match = self.pattern.match(text)
+        if match is None:
+            return None
+        value = self.low + self._convert_offset(match.group(1))
+        if not self.low <= value <= self.high:
+            # This can't match another range.
+            raise ValueError('labelled range parameter is out of range')
+        return value
+
+
+class EnumDescription:
+    def __init__(self, ranges):
+        self.ranges = [
+            UnlabelledRange(low, high)
+            if label is None
+            else LabelledRange(low, high, label)
+            for low, high, label in ranges
+        ]
+
+
+    def format(self, value, numeric_formatter):
+        candidates = (
+            r.format(value, numeric_formatter)
+            for r in self.ranges
+        )
+        try:
+            return next(c for c in candidates if c is not None)
+        except StopIteration:
+            raise ValueError(f'No valid format for value: {value}')
+
+
+    def parse(self, text):
+        candidates = (
+            r.parse(text)
+            for r in self.ranges
+        )
+        try:
+            return next(c for c in candidates if c is not None)
         except StopIteration:
             raise ValueError(f"Couldn't parse: {text}")
-
-
-    def _ok_enum(self, text, low, high, label):
-        try:
-            # A raw integer must be within range.
-            return low <= int(text, 0) <= high
-        except ValueError:
-            # A labelled value must match the specified label.
-            return label is not None and text.startswith(label)
-
-
-    def _parse_enum(self, text, low, high, label):
-        try:
-            result = int(text, 0)
-            assert low <= result <= high
-        except ValueError:
-            assert label is not None and text.startswith(label)
-            text = text[len(label):]
-            if low == high and not text:
-                result = low
-            elif not (text.startswith('(') and text.endswith(')')):
-                raise ValueError('Missing required offset for labelled range')
-            else:
-                try:
-                    result = int(text[1:-1], 0) + low
-                except ValueError:
-                    raise ValueError('Invalid offset for labelled range')
-            if not low <= result <= high:
-                raise ValueError('Offset for labelled range out of bounds')
-        return result
 
 
 class FlagsDescription:
