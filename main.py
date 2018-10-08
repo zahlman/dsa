@@ -131,7 +131,6 @@ def _load_paths(pathfile):
             if category not in paths:
                 raise ValueError('unrecognized path type {category}')
             paths[category].append(path)
-    print("PATHS:", paths)
     return paths
 
 

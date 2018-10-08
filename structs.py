@@ -168,4 +168,4 @@ class StructGroup:
                 f'struct `{name}` invalid or unrecognized at this point',
                 f'(valid options: {followers})'
             )))
-        return self.structs[name].parse(tokens)
+        return name, self.structs[name].parse(tokens)
