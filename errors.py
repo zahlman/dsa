@@ -12,6 +12,15 @@ class UserError(ValueError):
             raise cls(**kwargs)
 
 
+class SequenceError(UserError):
+    @classmethod
+    def first_not_none(cls, candidates, **kwargs):
+        try:
+            return next(c for c in candidates if c is not None)
+        except StopIteration:
+            raise cls(**kwargs)
+
+
 class MappingError(UserError):
     @classmethod
     def get(cls, mapping, key):
@@ -28,11 +37,12 @@ class MappingError(UserError):
         mapping[key] = value
 
 
-def parse_int(text):
+def parse_int(text, description=None):
     try:
         return int(text, 0)
-    except ValueError as e:
-        raise UserError(e) from e
+    except ValueError:
+        description = '' if description is None else (description + ' ')
+        raise UserError(f'{description}must be integer (got `{text}`)')
 
 
 def wrap(label, value, action, *args, **kwargs):
