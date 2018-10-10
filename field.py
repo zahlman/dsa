@@ -1,7 +1,16 @@
 from arguments import base, boolean, integer, parameters, string
 from description import Raw
+import errors
 from parse_config import parts_of
 from functools import partial
+
+
+class MISSING_DESCRIPTION(errors.MappingError):
+    """unrecognized description name `{key}`"""
+
+
+class FIXED_REFERENT(errors.UserError):
+    """fixed field may not have a referent"""
 
 
 class FieldTranslation:
@@ -46,10 +55,8 @@ class FieldTranslation:
 
     # Convert value computed from parsing into one stored in the data.
     def raw(self, value):
-        if not self.minimum <= value <= self.maximum:
-            raise ValueError(
-                f'{value} out of range {self.minimum}..{self.maximum}'
-            )
+        # Should be guaranteed by the underlying Description(s).
+        assert self.minimum <= value <= self.maximum
         value += self.bias
         if self.signed and value < 0:
             assert value >= -self.halfcount
@@ -87,7 +94,6 @@ class Field:
 
 
     def parse(self, text):
-        # TODO: handle referent labels.
         result = self.description.parse(text)
         if result is not None:
             result = self.translation.raw(result)
@@ -95,15 +101,9 @@ class Field:
 
 
 def make_field(line_tokens, description_lookup):
-    """Creates a factory that will create a Field later, along with the
-    `fixed` value (or None) that it will parse later, and the field size.
-    line_tokens -> tokenized line from the config file.
-
-    The factory expects the following parameters:
-    description -> resolved Description object for the field."""
     bnf, *flag_tokens = line_tokens
     bits, name, fixed = parts_of(bnf, ':', 1, 3, False)
-    bits = int(bits, 0)
+    bits = errors.parse_int(bits, 'bit count')
     params = parameters(
         {
             'bias': integer, 'signed': boolean, 'base': base,
@@ -111,21 +111,18 @@ def make_field(line_tokens, description_lookup):
         },
         flag_tokens
     )
-    translation = FieldTranslation(
-        bits, params.get('bias', 0), params.get('signed', False)
-    )
-    try:
-        values = params['values']
-        try:
-            description = description_lookup[values]
-        except KeyError:
-            raise ValueError(f"unrecognized description name '{values}'")
-    except KeyError:
-        description = Raw
     referent = params.get('referent', None)
-    field = Field(translation, params.get('base', hex), description, referent)
+    field = Field(
+        translation=FieldTranslation(
+            bits, params.get('bias', 0), params.get('signed', False)
+        ),
+        formatter=params.get('base', hex),
+        description=MISSING_DESCRIPTION.get(
+            description_lookup, params['values']
+        ) if 'values' in params else Raw,
+        referent=referent
+    )
     if fixed is not None:
-        if referent is not None:
-            raise ValueError('fixed field may not have a referent')
+        FIXED_REFERENT.require(referent is None)
         fixed = field.parse(fixed)
     return name, field, fixed, bits
