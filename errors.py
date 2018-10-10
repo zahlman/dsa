@@ -23,17 +23,17 @@ class SequenceError(UserError):
 
 class MappingError(UserError):
     @classmethod
-    def get(cls, mapping, key):
+    def get(cls, mapping, key, **kwargs):
         try:
             return mapping[key]
         except KeyError:
-            raise cls(key=key)
+            raise cls(key=key, **kwargs)
 
 
     @classmethod
-    def add_unique(cls, mapping, key, value):
+    def add_unique(cls, mapping, key, value, **kwargs):
         if key in mapping:
-            raise cls(key=key)
+            raise cls(key=key, **kwargs)
         mapping[key] = value
 
 
