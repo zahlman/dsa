@@ -1,4 +1,5 @@
-from parse_config import load_globs
+from assembly import SourceLoader
+from parse_config import load_globs, load_file
 from type_loader import TypeDescriptionLSM
 from structgroup_loader import StructGroupDescriptionLSM
 from functools import partial
@@ -113,8 +114,8 @@ class Disassembler:
 def timed(action, *args):
     t = time()
     result = action(*args)
-    elapsed = time() - t
-    print(f'({elapsed} s)')
+    elapsed = int((time() - t) * 1000)
+    print(f'({elapsed} ms)')
     return result
 
 
@@ -154,6 +155,16 @@ def _get_data(source):
         return f.read()
 
 
+def reassemble(infilename, outfilename, language):
+    chunks = load_file(SourceLoader(language), outfilename)
+    with open(infilename, 'rb') as f:
+        data = bytearray(f.read())
+    for position, chunk in chunks.items():
+        print(f'Test writing {len(chunk)} bytes at 0x{position:X}')
+        data[position:position+len(chunk)] = chunk
+    return bytes(data)
+
+
 def test(
     group_name, infilename, outfilename, position, pathfile
 ):
@@ -164,3 +175,6 @@ def test(
     d = timed(Disassembler, language, group_name, position, 'main')
     print('Disassembling...')
     timed(d, data, outfilename)
+    print('Reassembling...')
+    result = timed(reassemble, infilename, outfilename, language)
+    print('OK?', result == data)
