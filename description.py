@@ -1,6 +1,35 @@
+import errors
 from parse_config import parts_of
 from functools import partial
 import re
+
+
+class MISSING_PARAMETER(errors.UserError):
+    """missing required parameter for labelled range"""
+
+
+class FORBIDDEN_PARAMETER(errors.UserError):
+    """labelled constant does not take a parameter"""
+
+
+class PARAMETER_OUT_OF_RANGE(errors.UserError):
+    """labelled range parameter is out of range"""
+
+
+class FORMAT_FAILED(errors.SequenceError):
+    """no valid format for value: `{value}`"""
+
+
+class PARSE_FAILED(errors.SequenceError):
+    """couldn't parse: `{text}`"""
+
+
+class DUPLICATE_FLAG(errors.UserError):
+    """duplicate flag names not allowed"""
+
+
+class MULTIPLE_TOKENS_INVALID(errors.UserError):
+    """{thing} must be a single token (use [] to group multiple words)"""
 
 
 class UnlabelledRange:
@@ -32,34 +61,27 @@ class LabelledRange:
     def format(self, value, convert):
         low, high, label = self.low, self.high, self.label
         if not low <= value <= high:
+            # There could be another range that the value fits into.
             return None
         return label if low == high else f'{label}<{convert(value - low)}>'
 
 
     def _convert_offset(self, param):
-        need_param = self.low != self.high
-        if param is None:
-            if need_param:
-                raise ValueError(
-                    'missing required parameter for labelled range'
-                )
+        if self.low == self.high:
+            FORBIDDEN_PARAMETER.require(param is None)
             return 0
-        if not need_param:
-            raise ValueError('labelled constant does not take a parameter')
-        try:
-            return int(param, 0)
-        except ValueError:
-            raise ValueError('labelled range parameter must be integer')
+        else:
+            MISSING_PARAMETER.require(param is not None)
+            return errors.parse_int(param, 'labelled range parameter')
 
 
     def parse(self, text):
         match = self.pattern.match(text)
         if match is None:
             return None
+        # If the regex matched, the text can't match a different range.
         value = self.low + self._convert_offset(match.group(1))
-        if not self.low <= value <= self.high:
-            # This can't match another range.
-            raise ValueError('labelled range parameter is out of range')
+        PARAMETER_OUT_OF_RANGE.require(self.low <= value <= self.high)
         return value
 
 
@@ -74,25 +96,17 @@ class EnumDescription:
 
 
     def format(self, value, numeric_formatter):
-        candidates = (
-            r.format(value, numeric_formatter)
-            for r in self.ranges
+        return FORMAT_FAILED.first_not_none(
+            (r.format(value, numeric_formatter) for r in self.ranges),
+            value=value
         )
-        try:
-            return next(c for c in candidates if c is not None)
-        except StopIteration:
-            raise ValueError(f'No valid format for value: {value}')
 
 
     def parse(self, text):
-        candidates = (
-            r.parse(text)
-            for r in self.ranges
+        return PARSE_FAILED.first_not_none(
+            (r.parse(text) for r in self.ranges),
+            text=text
         )
-        try:
-            return next(c for c in candidates if c is not None)
-        except StopIteration:
-            raise ValueError(f"Couldn't parse: {text}")
 
 
 class FlagsDescription:
@@ -112,8 +126,7 @@ class FlagsDescription:
         value = 0
         items = [t.strip() for t in text.split('|')]
         set_flags = set(items)
-        if len(items) != len(set_flags):
-            raise ValueError('Duplicate flag names not allowed')
+        DUPLICATE_FLAG.require(len(items) == len(set_flags))
         for i, name in enumerate(self.names):
             if name in set_flags:
                 value |= 1 << i
@@ -151,13 +164,12 @@ class EnumDescriptionLSM:
         low, high = parts_of(values, ':', 1, 2, False)
         if high is None:
             high = low
-        if len(label) > 1:
-            raise ValueError('Label must be a single token (use [])')
-        elif len(label) == 0:
-            label = None
-        else:
-            label = label[0]
-        self.ranges.append((int(low, 0), int(high, 0), label))
+        MULTIPLE_TOKENS_INVALID.require(len(label) <= 1, thing='enum name')
+        self.ranges.append((
+            errors.parse_int(low, 'low end of range'),
+            errors.parse_int(high, 'high end of range'),
+            label[0] if label else None
+        ))
 
 
     def result(self):
@@ -172,8 +184,7 @@ class FlagsDescriptionLSM:
 
     def add_line(self, line_tokens):
         assert len(line_tokens) > 0 # empty lines were preprocessed out.
-        if len(line_tokens) > 1:
-            raise ValueError('Flag must be a single token (use [])')
+        MULTIPLE_TOKENS_INVALID.require(len(line_tokens) <= 1, thing='flag')
         self.names.append(line_tokens[0])
 
 
