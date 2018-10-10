@@ -42,11 +42,12 @@ class Chunk:
     def complete(self, label_lookup):
         previous = None
         result = bytearray()
-        for line in self.lines:
+        for i, line in enumerate(self.lines):
             previous, data = self.group.parse(
-                _resolve_labels(line, label_lookup), previous
+                _resolve_labels(line, label_lookup), i, previous
             )
             result.extend(data)
+        result.extend(self.group.parse_end(len(self.lines)))
         for f in reversed(self.filters):
             pass # TODO
         return self.location, bytes(result)

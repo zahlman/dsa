@@ -159,7 +159,9 @@ class StructGroup:
         raise ValueError(f'invalid source data')
 
 
-    def parse(self, tokens, previous=None):
+    def parse(self, tokens, count, previous):
+        if self.size is not None and count >= self.size:
+            raise ValueError('too many structs in chunk')
         followers = self.graph[previous]
         # Name extraction can't fail, since empty lines are skipped.
         name, *tokens = tokens
@@ -169,3 +171,9 @@ class StructGroup:
                 f'(valid options: {followers})'
             )))
         return name, self.structs[name].parse(tokens)
+
+
+    def parse_end(self, count):
+        if self.size is not None and count < self.size:
+            raise ValueError('not enough structs in chunk')
+        return b'' if self.terminator is None else self.terminator
