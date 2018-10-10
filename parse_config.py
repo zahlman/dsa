@@ -1,5 +1,14 @@
+import errors
 from functools import lru_cache, partial
 import glob, os, re, textwrap
+
+
+class NOT_ENOUGH_PARTS(errors.UserError):
+    """not enough parts for multipart token"""
+
+
+class TOO_MANY_PARTS(errors.UserError):
+    """too many parts for multipart token"""
 
 
 token = re.compile('(?:\[[^\[\]]*\])|(?:[^ \t\[\]]+)')
@@ -16,21 +25,21 @@ def tokenize(line):
     ]
 
 
+# FIXME
 def parts_of(token, separator, required, allowed, last_list):
     parts = [
         x.strip() if x.strip() else None
         for x in token.split(separator)
     ]
     count = len(parts)
-    if count < required:
-        raise ValueError('not enough parts for multipart token')
-    elif count < allowed:
+    NOT_ENOUGH_PARTS.require(count >= required)
+    if count < allowed:
         padding = allowed - count - (1 if last_list else 0)
         parts.extend([None] * padding)
     if last_list: # group up the last token, even if padding occurred.
         parts = parts[:allowed-1] + [parts[allowed-1:]]
-    elif count > allowed:
-        raise ValueError('too many parts for multipart token')
+    else:
+        TOO_MANY_PARTS.require(count <= allowed)
     return parts
 
 
@@ -86,10 +95,10 @@ def resolve_filenames(lib_globs, usr_globs):
 def feed(source_name, label, accumulator, machine, lines):
     print("Loading:", source_name)
     for position, indent, line_tokens in lines:
-        try:
-            machine.add_line(indent, line_tokens)
-        except ValueError as e:
-            raise ValueError(f'{source_name}: Line {position}: {e}')
+        errors.wrap(
+            f'{source_name}: Line', position,
+            machine.add_line, indent, line_tokens
+        )
     machine.end_file(label, accumulator)
 
 

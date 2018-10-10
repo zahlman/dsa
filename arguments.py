@@ -1,6 +1,39 @@
+import errors
 from parse_config import parts_of
 import binascii
 from functools import partial
+
+
+class DUPLICATE_PARAMETER(errors.UserError):
+    """duplicate specification of parameter `{name}`"""
+
+
+class UNRECOGNIZED_PARAMETER(errors.MappingError):
+    """unrecognized parameter `{key}`"""
+
+
+class MUST_BE_SINGLE_ITEM(errors.UserError):
+    """flag value must be a single item"""
+
+
+class ILLEGAL_VALUE(errors.UserError):
+    """value must be one of {whitelist}"""
+
+
+class MUST_BE_POSITIVE(errors.UserError):
+    """value cannot be negative or zero"""
+
+
+class INVALID_BOOLEAN(errors.MappingError):
+    """invalid boolean `{key}` (must be `true` or `false`, case-insensitive)"""
+
+
+class INVALID_BASE(errors.MappingError):
+    """invalid base setting `{key}` (allowed values: 2, 8, 10, 16)"""
+
+
+class INVALID_TERMINATOR(errors.UserError):
+    """invalid terminator format"""
 
 
 def parameters(whitelist, tokens):
@@ -10,68 +43,51 @@ def parameters(whitelist, tokens):
         name, item = parts_of(token, ':', 1, 2, True)
         if not item: # Shortcut for boolean flags
             item = ['True']
-        if name in specified:
-            raise ValueError(f"duplicate specification of parameter '{name}'")
+        DUPLICATE_PARAMETER.require(name not in specified, name=name)
         specified.add(name)
-        try:
-            converter = whitelist[name]
-        except KeyError:
-            raise ValueError(f"unrecognized parameter '{name}'")
-        result[name] = converter(item)
+        result[name] = UNRECOGNIZED_PARAMETER.get(whitelist, name)(item)
     return result
 
 
 # "types" for flag values.
 def string(items):
-    if len(items) > 1:
-        raise ValueError(f'invalid flag format')
+    MUST_BE_SINGLE_ITEM.require(len(items) == 1)
     return items[0]
 
 
 def integer(items):
-    return int(string(items), 0)
+    return errors.parse_int(string(items))
 
 
-def whitelisted_string(whitelist, items):
+def _whitelisted_string(whitelist, items):
     result = string(items)
-    if result not in whitelist:
-        raise ValueError(f'value must be one of {whitelist}')
+    ILLEGAL_VALUE.require(result in whitelist, whitelist=whitelist)
     return result
 
 
 def one_of(*values):
-    return partial(whitelisted_string, values)
+    return partial(_whitelisted_string, values)
 
 
 def positive_integer(items):
     result = integer(items)
-    if result < 1:
-        raise ValueError(f'value cannot be negative or zero')
+    MUST_BE_POSITIVE.require(result > 0)
     return result
 
 
 def boolean(items):
     text = string(items)
-    if text.lower() == 'true':
-        return True
-    if text.lower() == 'false':
-        return False
-    return bool(int(text, 0))
+    return INVALID_BOOLEAN.get({'true': True, 'false': False}, text.lower())
 
 
 def base(items):
     text = string(items)
-    try:
-        return {'2': bin, '8': oct, '10': str, '16': hex}[text]
-    except KeyError:
-        raise ValueError(
-            "invalid base setting (must be one of '2', '8', '10' or '16')"
-        )
+    return INVALID_BASE.get({'2': bin, '8': oct, '10': str, '16': hex}, text)
 
 
 def hexdump(items):
     text = string(items)
     try:
         return binascii.unhexlify(''.join(text.split()))
-    except binascii.Error:
-        raise ValueError(f'invalid terminator format')
+    except binascii.Error as e:
+        raise INVALID_TERMINATOR from e
