@@ -1,7 +1,44 @@
 from arguments import boolean, hexdump, parameters, positive_integer, one_of
+import errors
 from parse_config import parts_of
 from structs import Struct, StructGroup
 from collections import OrderedDict
+
+
+class NEXT_LAST_CONFLICT(errors.UserError):
+    """`next` and `last` options are mutually exclusive"""
+
+
+class UNRECOGNIZED_TYPE(errors.MappingError):
+    """unrecognized type {key}"""
+
+
+class NOT_FIXED_OR_NAMED(errors.UserError):
+    """member must have either a name or a fixed value"""
+
+
+class FIXED_AND_NAMED(errors.UserError):
+    """member with fixed value may not be named"""
+
+
+class DUPLICATE_STRUCT(errors.MappingError):
+    """duplicate struct definition for {key}"""
+
+
+class MEMBER_OUTSIDE_STRUCT(errors.UserError):
+    """member definition outside of struct"""
+
+
+class NO_OPTIONS(errors.UserError):
+    """empty struct group definition (no option line)"""
+
+
+class NO_STRUCTS(errors.UserError):
+    """empty struct group definition (no structs)"""
+
+
+class DUPLICATE_GROUP(errors.MappingError):
+    """duplicate definition for struct group `{key}`"""
 
 
 def parse_options(line_tokens):
@@ -17,9 +54,8 @@ def parse_options(line_tokens):
 def parse_struct_header(line_tokens):
     name, *flag_tokens = line_tokens # TODO: support for aliases
     options = parameters({'next': set, 'last': boolean}, flag_tokens)
-    if 'next' in options and 'last' in options:
-        raise ValueError('`next` and `last` options are mutually exclusive')
     if 'last' in options:
+        NEXT_LAST_CONFLICT.require('next' not in options)
         return name, set()
     if 'next' in options:
         return name, options['next']
@@ -44,15 +80,11 @@ class StructData:
     def add_member(self, line_tokens, types):
         tnf, *options = line_tokens
         typename, name, fixed = parts_of(tnf, ':', 1, 3, False)
-        if fixed is None and name is None:
-            raise ValueError(f'member must have either a name or a fixed value')
-        if fixed is not None and name is not None:
-            raise ValueError(f'member with fixed value may not be named')
-        try:
-            member = types[typename]
-        except KeyError:
-            raise ValueError(f'unrecognized type {typename}')
-        if fixed is not None:
+        member = UNRECOGNIZED_TYPE.get(types, typename)
+        if fixed is None:
+            NOT_FIXED_OR_NAMED.require(name is not None)
+        else:
+            FIXED_AND_NAMED.require(name is None)
             fixed = member.parse(fixed, name)
         self.member_data.append((member, name, fixed))
 
@@ -74,16 +106,13 @@ class StructGroupDescriptionLSM:
         if self.struct_data is None:
             return
         name, struct, followers = self.struct_data.create()
-        if name in self.structs:
-            raise ValueError(f'duplicate struct definition for {name}')
-        self.structs[name] = struct
+        DUPLICATE_STRUCT.add_unique(self.structs, name, struct)
         self.graph[name] = followers
         self.struct_data = None
 
 
     def _continue_struct(self, line_tokens):
-        if self.struct_data is None:
-            raise ValueError('member definition outside of struct')
+        MEMBER_OUTSIDE_STRUCT.require(self.struct_data is not None)
         self.struct_data.add_member(line_tokens, self.types)
 
 
@@ -102,14 +131,12 @@ class StructGroupDescriptionLSM:
 
 
     def end_file(self, label, accumulator):
-        if self.options is None:
-            raise ValueError('empty struct group definition (no option line)')
+        NO_OPTIONS.require(self.options is not None)
         self._push_old_struct()
-        if not self.structs:
-            raise ValueError('empty struct group definition (no structs)')
-        if label in accumulator:
-            raise ValueError(f'duplicate definition for struct group `{label}`')
-        accumulator[label] = StructGroup(
-            self.structs, self.graph, **self.options
+        NO_STRUCTS.require(bool(self.structs))
+        DUPLICATE_GROUP.add_unique(
+            accumulator, label, StructGroup(
+                self.structs, self.graph, **self.options
+            )
         )
         self._reset()
