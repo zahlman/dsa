@@ -1,7 +1,9 @@
 class UserError(ValueError):
     """For now, the __doc__ of a subclass provides the message template."""
-    def __init__(self, **kwargs):
-        super().__init__(self.__doc__.format_map(kwargs))
+    def __init__(self, message=None, **kwargs):
+        if message is None:
+            message = self.__doc__
+        super().__init__(message.format_map(kwargs))
 
 
     @classmethod
@@ -18,7 +20,7 @@ class MappingError(UserError):
         except KeyError:
             raise cls(key=key)
 
-    
+
     @classmethod
     def add_unique(cls, mapping, key, value):
         if key in mapping:
