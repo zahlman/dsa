@@ -1,5 +1,34 @@
+import errors
 from field import make_field
 from functools import partial
+
+
+class NONUNIQUE_ARGUMENT_COUNTS(errors.MappingError):
+    """multiple `option`s found with {key} arguments"""
+
+
+class INCONSISTENT_MEMBER_SIZE(errors.UserError):
+    """`option`s must all have the same total size"""
+
+
+class NO_OPTIONS(errors.UserError):
+    """must have at least one `option`"""
+
+
+class NO_MATCHING_OPTION(errors.SequenceError):
+    """data doesn't match any option for formatting"""
+
+
+class INVALID_PARAMETER_COUNT(errors.MappingError):
+    """no formatting `option` uses {key} parameters"""
+
+
+class INVALID_OPTION_SIZE(errors.UserError):
+    """`option` size must be a multiple of 8 bits"""
+
+
+class JUNK_AFTER_OPTION(errors.UserError):
+    """junk data after option name"""
 
 
 class Option:
@@ -60,15 +89,10 @@ def _build_option_map(options):
     for option in options:
         count = option.arguments
         sizes.add(option.size)
-        if count in result:
-            raise ValueError('Options must have unique argument counts')
-        result[count] = option
-    if len(sizes) > 1:
-        raise ValueError('Inconsistent Option sizes')
-    try:
-        return sizes.pop(), result
-    except KeyError:
-        raise ValueError('Must have at least one Option')
+        NONUNIQUE_ARGUMENT_COUNTS.add_unique(result, count, option)
+    INCONSISTENT_MEMBER_SIZE.require(len(sizes) <= 1)
+    NO_OPTIONS.require(len(sizes) >= 1)
+    return sizes.pop(), result
 
 
 class Member:
@@ -79,25 +103,33 @@ class Member:
         self.size, self.option_map = _build_option_map(options)
 
 
-    def format(self, value, disassembler, name):
-        for option in self.options:
-            result = option.format(
+    def _format(self, value, disassembler, name):
+        return _collect(NO_MATCHING_OPTION.first_not_none(
+            option.format(
                 int.from_bytes(value, 'little'), disassembler, name
             )
-            if result is not None:
-                return _collect(result)
-        raise ValueError("couldn't format data (no matching Option)")
+            for option in self.options
+        ))
 
 
-    def parse(self, raw):
+    def format(self, value, disassembler, name):
+        return errors.wrap(
+            f'Member {name} (of type {self.typename})',
+            self._format, value, disassembler, name
+        )
+
+
+    def _parse(self, raw):
         items = _itemize(raw)
-        try:
-            parser = self.option_map[len(items)]
-        except KeyError:
-            raise ValueError(
-                f'Invalid number of parameters for {self.typename} type'
-            )
+        parser = INVALID_PARAMETER_COUNT.get(self.option_map, len(items))
         return parser.parse(items).to_bytes(self.size, 'little')
+
+
+    def parse(self, raw, name):
+        return errors.wrap(
+            f'Member {name} (of type {self.typename})',
+            self._parse, raw
+        )
 
 
 class OptionLSM:
@@ -124,8 +156,7 @@ class OptionLSM:
                 fields.append(field)
             position += bits
         size, remainder = divmod(position, 8)
-        if remainder:
-            raise ValueError('option size must be a multiple of 8 bits')
+        INVALID_OPTION_SIZE.require(not remainder)
         return Option(
             offsets, fields, fixed_mask, fixed_value, size
         )
@@ -138,8 +169,7 @@ class MemberLSM:
 
     def add_line(self, line_tokens):
         name, *junk = line_tokens
-        if junk:
-            raise ValueError('junk data after option name')
+        JUNK_AFTER_OPTION.require(not junk)
         self.option_names.append(name)
 
 

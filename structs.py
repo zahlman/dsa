@@ -51,8 +51,10 @@ class Struct:
     def parse(self, tokens):
         # This invariant should be upheld by the struct lookup/dispatch.
         assert len(tokens) == len(self.members)
-        for member, token, offset in zip(self.members, tokens, self.offsets):
-            raw = member.parse(token)
+        for member, name, token, offset in zip(
+            self.members, self.names, tokens, self.offsets
+        ):
+            raw = member.parse(token, name)
             assert len(raw) == member.size
             self.template[offset:offset+len(raw)] = raw
         return bytes(self.template)

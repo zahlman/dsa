@@ -53,7 +53,7 @@ class StructData:
         except KeyError:
             raise ValueError(f'unrecognized type {typename}')
         if fixed is not None:
-            fixed = member.parse(fixed)
+            fixed = member.parse(fixed, name)
         self.member_data.append((member, name, fixed))
 
 
