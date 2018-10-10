@@ -12,6 +12,15 @@ class UserError(ValueError):
             raise cls(**kwargs)
 
 
+    @classmethod
+    def convert(cls, exctype, action, *args, **kwargs):
+        # N.B. kwargs are for the action, not the exception class!
+        try:
+            return action(*args, **kwargs)
+        except exctype as e:
+            raise cls() from e
+
+
 class SequenceError(UserError):
     @classmethod
     def first_not_none(cls, candidates, **kwargs):

@@ -184,10 +184,7 @@ class SourceLoader:
             self.chunks.append(chunk)
             self.current_chunk = None
         else:
-            try:
-                self.filter_stack.pop()
-            except IndexError:
-                raise UNMATCHED_BRACE
+            UNMATCHED_BRACE.convert(IndexError, self.filter_stack.pop)
 
 
     def add_line(self, indent, tokens):

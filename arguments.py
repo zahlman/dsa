@@ -86,8 +86,5 @@ def base(items):
 
 
 def hexdump(items):
-    text = string(items)
-    try:
-        return binascii.unhexlify(''.join(text.split()))
-    except binascii.Error as e:
-        raise INVALID_TERMINATOR from e
+    text = ''.join(string(items).split())
+    return INVALID_TERMINATOR.convert(binascii.Error, binascii.unhexlify, text)
