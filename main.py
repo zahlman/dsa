@@ -1,4 +1,5 @@
 from assembly import SourceLoader
+import errors
 from parse_config import load_globs, load_file
 from type_loader import TypeDescriptionLSM
 from structgroup_loader import StructGroupDescriptionLSM
@@ -7,11 +8,12 @@ from itertools import count
 from time import time
 
 
-def _verify(x, y, where):
-    if x != y:
-        raise ValueError(
-            'conflicting requests for parsing data at 0x{where:X}'
-        )
+class CHUNK_TYPE_CONFLICT(errors.UserError):
+    """conflicting requests for parsing data at 0x{where:X}"""
+
+
+class UNRECOGNIZED_PATH_TYPE(errors.MappingError):
+    """unrecognized path type `{key}`"""
 
 
 class Disassembler:
@@ -61,9 +63,13 @@ class Disassembler:
 
     def add(self, group_name, location, label_base):
         if location in self.used_groups:
-            _verify(group_name, self.used_groups[location], location)
+            CHUNK_TYPE_CONFLICT.require(
+                group_name == self.used_groups[location], where=location
+            )
         elif location in self.pending_groups:
-            _verify(group_name, self.pending_groups[location], location)
+            CHUNK_TYPE_CONFLICT.require(
+                group_name == self.pending_groups[location], where=location
+            )
         else:
             self.pending_groups[location] = group_name
         return self.get_label(location, label_base)
@@ -77,7 +83,6 @@ class Disassembler:
             group = self.all_groups[group_name]
         except KeyError: # skip chunk for unknown group
             print(f'Warning: skipping chunk of unknown type {group_name}')
-            #raise
         else:
             chunk, size = self._make_chunk(source, location, group)
             self._store_result(location, group_name, chunk, size)
@@ -129,9 +134,7 @@ def _load_paths(pathfile):
     with open(pathfile) as f:
         for line in f:
             category, path = line.split()
-            if category not in paths:
-                raise ValueError('unrecognized path type {category}')
-            paths[category].append(path)
+            UNRECOGNIZED_PATH_TYPE.get(paths, category).append(path)
     return paths
 
 
