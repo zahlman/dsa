@@ -93,12 +93,22 @@ def feed(source_name, label, accumulator, machine, lines):
     machine.end_file(label, accumulator)
 
 
+def feed_file(machine, accumulator, filename):
+    label = os.path.splitext(os.path.basename(filename))[0]
+    with open(filename) as f:
+        feed(f"File '{filename}'", label, accumulator, machine, process(f))
+
+
 def load_globs(machine, lib_globs, usr_globs):
     accumulator = {}
     for filename in resolve_filenames(lib_globs, usr_globs):
-        label = os.path.splitext(os.path.basename(filename))[0]
-        with open(filename) as f:
-            feed(f"File '{filename}'", label, accumulator, machine, process(f))
+        feed_file(machine, accumulator, filename)
+    return accumulator
+
+
+def load_file(machine, filename):
+    accumulator = {}
+    feed_file(machine, accumulator, filename)
     return accumulator
 
 
