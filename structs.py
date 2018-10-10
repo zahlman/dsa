@@ -1,4 +1,42 @@
+import errors
 import re
+
+
+class UNRECOGNIZED_FOLLOWERS(errors.UserError):
+    """unrecognized followers `{extra}` for struct `{current}`"""
+
+
+class MISALIGNED_CHUNK(errors.UserError):
+    """chunk not aligned to multiple of {alignment} boundary"""
+
+
+class MISSING_TERMINATOR_NATURAL(errors.UserError):
+    """missing terminator after `{previous}` struct"""
+
+
+class MISSING_CHUNKS(errors.UserError):
+    """premature end of chunk; {remaining} struct(s) missing"""
+
+
+class MISSING_TERMINATOR_COUNTED(errors.UserError):
+    """missing terminator after {count} struct(s)"""
+
+
+class NO_MATCH(errors.SequenceError):
+    """invalid source data"""
+
+
+class CHUNK_TOO_BIG(errors.UserError):
+    """too many structs in chunk"""
+
+
+class CHUNK_TOO_SMALL(errors.UserError):
+    """not enough structs in chunk"""
+
+
+# Doesn't quite fit the pattern for a MappingError.
+class INVALID_FOLLOWER(errors.UserError):
+    """struct `{name}` invalid here (valid options: {followers})"""
 
 
 class Struct:
@@ -68,10 +106,7 @@ def _normalized_graph(graph, first):
             result[current] = all_nodes
             continue
         extra = followers - all_nodes
-        if extra:
-            raise ValueError(
-                f'unrecognized followers `{extra}` for struct `{current}`'
-            )
+        UNRECOGNIZED_FOLLOWERS.require(not extra, extra=extra, current=current)
         result[current] = followers
     result[None] = all_nodes if first is None else first
     # Preserve order.
@@ -100,10 +135,10 @@ class StructGroup:
 
 
     def check_alignment(self, position):
-        if position % self.alignment != 0:
-            raise ValueError(
-                f'chunk not aligned to multiple of {self.alignment} boundary'
-            )
+        MISALIGNED_CHUNK.require(
+            position % self.alignment == 0,
+            alignment=self.alignment
+        )
 
 
     def _remaining(self, count):
@@ -124,24 +159,34 @@ class StructGroup:
             result = set()
         else:
             result = self.graph[previous]
-            if self.terminator is not None and not result:
-                raise ValueError(
-                    f'missing terminator after `{previous}` struct'
-                )
+            MISSING_TERMINATOR_NATURAL.require(
+                result or (self.terminator is None),
+                previous=previous
+            )
         # Validate against count, if applicable.
         remaining = self._remaining(count)
-        if not result and (remaining not in {0, None}):
-            raise ValueError(
-                f'premature end of chunk; {remaining} struct(s) missing'
+        if not result:
+            MISSING_CHUNKS.require(
+                remaining in {0, None}, remaining=remaining
             )
-        if result and remaining == 0:
-            if self.terminator is not None:
-                raise ValueError(
-                    f'missing terminator after {count} struct(s)'
-                )
+        elif remaining == 0:
+            MISSING_TERMINATOR_COUNTED.require(
+                self.terminator is None, count=count
+            )
             # Otherwise: end of counted block, and last struct was not `last`;
             # this is not an error, but we stop formatting here.
             result = set()
+        return result
+
+
+    def _try_candidate(self, name, source, position, disassembler):
+        assert name in self.structs
+        result = errors.wrap(
+            f'Struct {name}',
+            self.structs[name].format_from, source, position, disassembler
+        )
+        if result is not None:
+            result = name, result
         return result
 
 
@@ -149,33 +194,23 @@ class StructGroup:
         candidates = self._candidates(source, position, previous, count)
         if not candidates:
             return None
-        for name in candidates:
-            struct = self.structs[name]
-            try:
-                result = struct.format_from(source, position, disassembler)
-            except ValueError as e:
-                raise ValueError(f'Struct {name}: {e}')
-            if result is not None:
-                return name, result
-        # There were candidates, but none worked. Maybe premature end of data?
-        raise ValueError(f'invalid source data')
+        return NO_MATCH.first_not_none(
+            self._try_candidate(name, source, position, disassembler)
+            for name in candidates
+        )
 
 
     def parse(self, tokens, count, previous):
-        if self.size is not None and count >= self.size:
-            raise ValueError('too many structs in chunk')
+        CHUNK_TOO_BIG.require(self.size is None or count < self.size)
         followers = self.graph[previous]
         # Name extraction can't fail, since empty lines are skipped.
         name, *tokens = tokens
-        if name not in followers:
-            raise ValueError(' '.join((
-                f'struct `{name}` invalid or unrecognized at this point',
-                f'(valid options: {followers})'
-            )))
+        INVALID_FOLLOWER.require(
+            name in followers, name=name, followers=followers
+        )
         return name, self.structs[name].parse(tokens)
 
 
     def parse_end(self, count):
-        if self.size is not None and count < self.size:
-            raise ValueError('not enough structs in chunk')
+        CHUNK_TOO_SMALL.require(self.size is None or count >= self.size)
         return b'' if self.terminator is None else self.terminator
