@@ -1,22 +1,74 @@
+import errors
+
+
+class UNRECOGNIZED_LABEL(errors.MappingError):
+    """unrecognized label `@{key}`"""
+
+
+class UNRECOGNIZED_DIRECTIVE(errors.MappingError):
+    """unrecognized directive `@{key}`"""
+
+
+class LABEL_TOOMANYARGS(errors.UserError):
+    """too many arguments for `@label` directive"""
+
+
+class LABEL_NONAME(errors.UserError):
+    """missing name for `@label` directive"""
+
+
+class MISSING_BRACE(errors.UserError):
+    """missing open brace for `@{directive}` directive"""
+
+
+class UNRECOGNIZED_GROUP_NAME(errors.MappingError):
+    """unrecognized group name `{key}`"""
+
+
+class GROUPNAME_MISSING(errors.UserError):
+    """missing group name"""
+
+
+class GROUPNAME_EXTRA(errors.UserError):
+    """junk after group name"""
+
+
+class UNMATCHED_BRACE(errors.UserError):
+    """unmatched closing brace"""
+
+
+class DIRECTIVE_INSIDE_CHUNK(errors.UserError):
+    """directives not allowed inside `@group` block"""
+
+
+class JUNK_AFTER_CLOSE_BRACE(errors.UserError):
+    """closing brace must be on a line by itself"""
+
+
+class NON_DIRECTIVE_OUTSIDE_CHUNK(errors.UserError):
+    """non-directive lines must be inside `@group` blocks"""
+
+
+class DUPLICATE_CHUNK_LOCATION(errors.MappingError):
+    """duplicate definition for chunk at 0x{key:X}"""
+
+
 def _resolve_labels_sub(part, label_lookup):
     if not part.startswith('@'):
         return part
-    try:
-        # It will get converted back to int later. FIXME this parsing is hax
-        return str(label_lookup[part[1:]])
-    except KeyError:
-        raise ValueError('unrecognized label `@{part}`')
+    label = part[1:]
+    return str(UNRECOGNIZED_LABEL.get(label_lookup, label))
+    # It will get converted back to int later. FIXME this parsing is hax
 
 
 def _resolve_labels(line, label_lookup):
-    result = [
+    return [
         ', '.join(
             _resolve_labels_sub(part.strip(), label_lookup)
             for part in token.split(',')
         )
         for token in line
     ]
-    return result
 
 
 class _DummyLookup(dict):
@@ -63,38 +115,35 @@ class SourceLoader:
         self.current_chunk = None
 
 
-    def _dispatch(self, directive, rest):
-        try:
-            handler = {
+    def _dispatch(self, first, rest):
+        UNRECOGNIZED_DIRECTIVE.get(
+            {
                 'label': self._process_label,
                 'filter': self._process_filter,
                 'group': self._process_group
-            }[directive]
-        except KeyError:
-            raise ValueError(f'unrecognized directive `{first}`')
-        handler(rest)
+            },
+            first
+        )(rest)
 
 
     def _process_label(self, tokens):
         count = len(tokens)
-        if count > 2:
-            raise ValueError(f'too many arguments for `@label` directive')
-        elif count == 2:
+        LABEL_TOOMANYARGS.require(count <= 2)
+        LABEL_NONAME.require(count > 0)
+        if count == 2:
             name, position = tokens
-            self.position = int(position, 0)
-        elif count == 1:
-            name = tokens[0]
+            self.position = errors.parse_int(position)
         else:
-            raise ValueError(f'missing name for label')
+            assert count == 1
+            # Use the existing value for self.position.
+            name, = tokens
         self.labels[name] = self.position
 
 
     def _verify_brace(self, tokens, dname):
-        if not tokens:
-            raise ValueError(f'missing open brace for `@{dname}` directive')
+        MISSING_BRACE.require(bool(tokens), directive=dname)
         *args, brace = tokens
-        if brace != '{':
-            raise ValueError(f'missing open brace for `@{dname}` directive')
+        MISSING_BRACE.require(brace == '{', directive=dname)
         return args
 
 
@@ -108,19 +157,15 @@ class SourceLoader:
 
 
     def _get_group(self, name):
-        try:
-            return self.all_groups[name]
-        except KeyError:
-            raise ValueError(f'unrecognized group name `{name}`')
+        return UNRECOGNIZED_GROUP_NAME.get(self.all_groups, name)
 
 
     def _process_group(self, tokens):
         assert self.current_chunk is None
         tokens = self._verify_brace(tokens, 'group')
-        if len(tokens) == 0:
-            raise ValueError(f'missing group name')
-        if len(tokens) == 2:
-            raise ValueError(f'junk after group name')
+        count = len(tokens)
+        GROUPNAME_MISSING.require(count > 0)
+        GROUPNAME_EXTRA.require(count < 2)
         self.current_chunk = Chunk(
             self.position, self._get_filters(), self._get_group(tokens[0])
         )
@@ -142,7 +187,7 @@ class SourceLoader:
             try:
                 self.filter_stack.pop()
             except IndexError:
-                raise ValueError(f'unmatched closing brace')
+                raise UNMATCHED_BRACE
 
 
     def add_line(self, indent, tokens):
@@ -150,17 +195,14 @@ class SourceLoader:
         assert tokens # empty lines were preprocessed out.
         first, *rest = tokens
         if first.startswith('@'):
-            if self.current_chunk is not None:
-                raise ValueError('Directive not allowed here')
+            DIRECTIVE_INSIDE_CHUNK.require(self.current_chunk is None)
             self._dispatch(first[1:], rest)
         elif first == '}':
-            if rest:
-                raise ValueError('Closing brace must be on a line by itself')
+            JUNK_AFTER_CLOSE_BRACE.require(not rest)
             self._close_directive()
-        elif self.current_chunk is not None:
-            self.current_chunk.add_line(tokens)
         else:
-            raise ValueError('Syntax error (should this be inside a block?)')
+            NON_DIRECTIVE_OUTSIDE_CHUNK.require(self.current_chunk is not None)
+            self.current_chunk.add_line(tokens)
 
 
     def end_file(self, label, accumulator):
@@ -168,8 +210,4 @@ class SourceLoader:
         # file contents to the accumulator.
         for chunk in self.chunks:
             key, value = chunk.complete(self.labels)
-            if key in accumulator:
-                raise ValueError(
-                    f'Duplicate definition for chunk at 0x{key:X}'
-                )
-            accumulator[key] = value
+            DUPLICATE_CHUNK_LOCATION.add_unique(accumulator, key, value)
