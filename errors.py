@@ -45,8 +45,8 @@ def parse_int(text, description=None):
         raise UserError(f'{description}must be integer (got `{text}`)')
 
 
-def wrap(label, value, action, *args, **kwargs):
+def wrap(tag, action, *args, **kwargs):
     try:
         return action(*args, **kwargs)
     except UserError as e:
-        raise e.__class__(f'{label} {value}: {e}') from e
+        raise e.__class__(f'{tag}: {e}') from e

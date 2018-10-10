@@ -96,7 +96,7 @@ def feed(source_name, label, accumulator, machine, lines):
     print("Loading:", source_name)
     for position, indent, line_tokens in lines:
         errors.wrap(
-            f'{source_name}: Line', position,
+            f'{source_name}: Line {position}',
             machine.add_line, indent, line_tokens
         )
     machine.end_file(label, accumulator)
