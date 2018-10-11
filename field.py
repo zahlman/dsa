@@ -4,6 +4,10 @@ from line_parsing import arguments, base, boolean, integer, string, TokenError
 from functools import partial
 
 
+class UNALIGNED_POINTER(errors.UserError):
+    """cannot refer to this address (wrong alignment)"""
+
+
 class INVALID_BNF(TokenError):
     """invalid bits/name/fixed data (token should have 1..3 parts, has {actual})"""
 
@@ -17,9 +21,10 @@ class FIXED_REFERENT(errors.UserError):
 
 
 class FieldTranslation:
-    def __init__(self, bits, bias, signed):
+    def __init__(self, bits, bias, stride, signed):
         self.bits = bits
         self.bias = bias
+        self.stride = stride
         self.signed = signed
 
 
@@ -40,12 +45,12 @@ class FieldTranslation:
 
     @property
     def minimum(self):
-        return (-self.halfcount if self.signed else 0) - self.bias
+        return (-self.halfcount if self.signed else 0) * self.stride + self.bias
 
 
     @property
     def maximum(self):
-        return (self.halfcount if self.signed else self.count) - 1 - self.bias
+        return ((self.halfcount if self.signed else self.count) - 1) * self.stride + self.bias
 
 
     # Convert unsigned value from the data into one that will be formatted.
@@ -53,14 +58,15 @@ class FieldTranslation:
         assert 0 <= raw < self.count
         if self.signed and raw >= self.halfcount:
             raw -= self.count
-        return raw - self.bias
+        return (raw * self.stride) + self.bias
 
 
     # Convert value computed from parsing into one stored in the data.
     def raw(self, value):
         # Should be guaranteed by the underlying Description(s).
         assert self.minimum <= value <= self.maximum
-        value += self.bias
+        value, remainder = divmod(value - self.bias, self.stride)
+        UNALIGNED_POINTER.require(not remainder)
         if self.signed and value < 0:
             assert value >= -self.halfcount
             value += self.count
@@ -117,12 +123,12 @@ def make_field(line_tokens, description_lookup):
         }
     )
     field = Field(
-        translation=FieldTranslation(bits, args.bias, args.signed),
-        formatter=args.base,
-        description=Raw if args.values is None else MISSING_DESCRIPTION.get(
+        FieldTranslation(bits, args.bias, args.stride, args.signed),
+        args.base,
+        Raw if args.values is None else MISSING_DESCRIPTION.get(
             description_lookup, args.values
         ),
-        referent=args.referent
+        args.referent
     )
     if fixed is not None:
         FIXED_REFERENT.require(args.referent is None)
