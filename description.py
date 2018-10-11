@@ -37,13 +37,21 @@ class SINGLE_TOKEN_REQUIRED(errors.UserError):
     (use `[]` to group multiple words; `,` and `:` are not allowed)"""
 
 
+def _within(low, value, high):
+    if low is not None and value < low:
+        return False
+    if high is not None and value > high:
+        return False
+    return True
+
+
 class UnlabelledRange:
     def __init__(self, low, high):
         self.low, self.high = low, high
 
 
     def format(self, value, convert):
-        return convert(value) if self.low <= value <= self.high else None
+        return convert(value) if _within(self.low, value, self.high) else None
 
 
     def parse(self, text):
@@ -69,17 +77,9 @@ class LabelledRange:
         self.definite = (low == high == self.baseline)
 
 
-    def _in_range(self, value):
-        if self.low is not None and value < self.low:
-            return False
-        if self.high is not None and value > self.high:
-            return False
-        return True
-
-
     def format(self, value, convert):
         return (
-            None if not self._in_range(value) # try another range.
+            None if not _within(self.low, value, self.high)
             else self.label if self.definite
             else f'{self.label}<{convert(value - self.baseline)}>'
         )
@@ -100,7 +100,7 @@ class LabelledRange:
             return None
         # If the regex matched, the text can't match a different range.
         value = self.baseline + self._convert_offset(match.group(1))
-        PARAMETER_OUT_OF_RANGE.require(self._in_range(value))
+        PARAMETER_OUT_OF_RANGE.require(_within(self.low, value, self.high))
         return value
 
 
