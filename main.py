@@ -1,8 +1,8 @@
 from assembly import SourceLoader
 import errors
-from parse_config import load_globs, load_file
-from type_loader import TypeDescriptionLSM
+from file_parsing import load_globs, load_file
 from structgroup_loader import StructGroupDescriptionLSM
+from type_loader import TypeDescriptionLSM
 from functools import partial
 from itertools import count
 from time import time

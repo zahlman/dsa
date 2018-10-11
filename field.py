@@ -1,7 +1,6 @@
-from arguments import arguments, base, boolean, integer, string
 from description import Raw
 import errors
-from parse_config import parts_of
+from line_parsing import arguments, base, boolean, integer, parts_of, string
 from functools import partial
 
 

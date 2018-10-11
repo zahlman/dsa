@@ -1,5 +1,5 @@
 import errors
-from parse_config import parts_of
+from line_parsing import parts_of
 from functools import partial
 import re
 

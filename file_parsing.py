@@ -1,61 +1,7 @@
 import errors
+from line_parsing import tokenize
 from functools import lru_cache, partial
-import glob, os, re, textwrap
-
-
-class NOT_ENOUGH_PARTS(errors.UserError):
-    """not enough parts for multipart token"""
-
-
-class TOO_MANY_PARTS(errors.UserError):
-    """too many parts for multipart token"""
-
-
-token = re.compile('(?:\[[^\[\]]*\])|(?:[^ \t\[\]]+)')
-
-
-def tokenize(line):
-    # Also normalizes whitespace within bracketed tokens.
-    # We need to do this to avoid e.g. issues with multi-word identifiers
-    # (like 'foo bar' not matching 'foo\tbar'), which gets that much hairier
-    # with line-wrapping involved.
-    return [
-        x[1:-1] if x.startswith('[') else x
-        for x in token.findall(' '.join(line.split()))
-    ]
-
-
-# FIXME
-def parts_of(token, separator, required, allowed, last_list):
-    parts = [
-        x.strip() if x.strip() else None
-        for x in token.split(separator)
-    ]
-    count = len(parts)
-    NOT_ENOUGH_PARTS.require(count >= required)
-    if count < allowed:
-        padding = allowed - count - (1 if last_list else 0)
-        parts.extend([None] * padding)
-    if last_list: # group up the last token, even if padding occurred.
-        parts = parts[:allowed-1] + [parts[allowed-1:]]
-    else:
-        TOO_MANY_PARTS.require(count <= allowed)
-    return parts
-
-
-# Used as the final step in producing output when disassembling.
-def format_line(tokens):
-    tokens = [
-        t if t == ''.join(t.split()) else f'[{t}]'
-        for t in tokens
-    ]
-    return textwrap.wrap(
-        ' '.join(tokens), width=78,
-        # Indicate the wrapped lines according to spec.
-        subsequent_indent=' ' * len(tokens[0]) + ' + ',
-        # Ensure that `textwrap` doesn't alter anything important.
-        break_long_words=False, break_on_hyphens=False
-    )
+import glob, os
 
 
 def process(lines):

@@ -1,6 +1,5 @@
-from arguments import arguments, boolean, hexdump, positive_integer, one_of
 import errors
-from parse_config import parts_of
+from line_parsing import arguments, boolean, hexdump, parts_of, positive_integer, one_of
 from structs import Struct, StructGroup
 from collections import OrderedDict
 
