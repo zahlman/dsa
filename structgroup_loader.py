@@ -1,11 +1,19 @@
 import errors
-from line_parsing import arguments, boolean, hexdump, parts_of, positive_integer, one_of
+from line_parsing import arguments, boolean, hexdump, one_of, positive_integer, TokenError
 from structs import Struct, StructGroup
 from collections import OrderedDict
 
 
+class INVALID_STRUCT_NAME(TokenError):
+    """struct name must be single-part (has {actual} parts)"""
+
+
 class NEXT_LAST_CONFLICT(errors.UserError):
     """`next` and `last` options are mutually exclusive"""
+
+
+class INVALID_TNF(errors.UserError):
+    """invalid typename/name/fixed data"""
 
 
 class UNRECOGNIZED_TYPE(errors.MappingError):
@@ -52,6 +60,7 @@ def parse_options(line_tokens):
 
 def parse_struct_header(line_tokens):
     name, *flag_tokens = line_tokens # TODO: support for aliases
+    name, = INVALID_STRUCT_NAME.pad(name, 1, 1)
     options = arguments(
         flag_tokens, {'next': (set, None), 'last': (boolean, False)}
     )
@@ -80,12 +89,17 @@ class StructData:
 
     def add_member(self, line_tokens, types):
         tnf, *options = line_tokens
-        typename, name, fixed = parts_of(tnf, ':', 1, 3, False)
+        # Any parts after the second are interpreted as a fixed-value token.
+        try:
+            typename, name, *fixed = tnf
+        except ValueError:
+            raise INVALID_TNF
         member = UNRECOGNIZED_TYPE.get(types, typename)
-        if fixed is None:
-            NOT_FIXED_OR_NAMED.require(name is not None)
+        if not fixed:
+            NOT_FIXED_OR_NAMED.require(name != '')
+            fixed = None # normalize for later use
         else:
-            FIXED_AND_NAMED.require(name is None)
+            FIXED_AND_NAMED.require(name == '')
             fixed = member.parse(fixed, name)
         self.member_data.append((member, name, fixed))
 

@@ -1,6 +1,15 @@
 from description import EnumDescriptionLSM, FlagsDescriptionLSM
 import errors
+import line_parsing
 from member import OptionLSM, MemberLSM
+
+
+class INVALID_SECTION_TYPE(line_parsing.TokenError):
+    """invalid section type (token must be single-part; has {actual} parts)"""
+
+
+class INVALID_NAME(line_parsing.TokenError):
+    """invalid {thing} name (token must be single-part; has {actual} parts)"""
 
 
 class UNKNOWN_SECTION_TYPE(errors.MappingError):
@@ -54,6 +63,8 @@ class TypeDescriptionLSM:
     def _next_block(self, line_tokens):
         INVALID_SECTION_HEADER.require(len(line_tokens) == 2)
         section_type, name = line_tokens
+        section_type, = INVALID_SECTION_TYPE.pad(section_type, 1, 1)
+        name, = INVALID_NAME.pad(name, 1, 1, thing=section_type)
         loader, container = self._categorize(section_type)
         section = loader()
         DUPLICATE_SECTION.add_unique(

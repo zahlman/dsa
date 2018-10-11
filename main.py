@@ -1,6 +1,7 @@
 from assembly import SourceLoader
 import errors
 from file_parsing import load_globs, load_file
+from line_parsing import format_line
 from structgroup_loader import StructGroupDescriptionLSM
 from type_loader import TypeDescriptionLSM
 from functools import partial
@@ -56,7 +57,7 @@ class Disassembler:
                 break
             # TODO: possibly get new chunk requests here.
             previous, (tokens, size) = result
-            lines.append(f"{previous} {' '.join(tokens)}")
+            lines.extend(format_line((previous,) + tokens))
             position += size
         return lines, position - location
 
@@ -124,6 +125,7 @@ def timed(action, *args):
     return result
 
 
+# TODO make a more general sort of 'script' file.
 def _load_paths(pathfile):
     paths = {
         'lib_types': [],

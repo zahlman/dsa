@@ -1,7 +1,11 @@
 from description import Raw
 import errors
-from line_parsing import arguments, base, boolean, integer, parts_of, string
+from line_parsing import arguments, base, boolean, integer, string, TokenError
 from functools import partial
+
+
+class INVALID_BNF(TokenError):
+    """invalid bits/name/fixed data (token should have 1..3 parts, has {actual})"""
 
 
 class MISSING_DESCRIPTION(errors.MappingError):
@@ -101,7 +105,7 @@ class Field:
 
 def make_field(line_tokens, description_lookup):
     bnf, *flag_tokens = line_tokens
-    bits, name, fixed = parts_of(bnf, ':', 1, 3, False)
+    bits, name, fixed = INVALID_BNF.pad(bnf, 1, 3)
     bits = errors.parse_int(bits, 'bit count')
     args = arguments(
         flag_tokens,

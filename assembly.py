@@ -1,4 +1,5 @@
 import errors
+from line_parsing import TokenError
 
 
 class UNRECOGNIZED_LABEL(errors.MappingError):
@@ -9,12 +10,16 @@ class UNRECOGNIZED_DIRECTIVE(errors.MappingError):
     """unrecognized directive `@{key}`"""
 
 
-class LABEL_TOOMANYARGS(errors.UserError):
-    """too many arguments for `@label` directive"""
+class INVALID_LABEL(TokenError):
+    """invalid syntax for `@label` directive"""
 
 
-class LABEL_NONAME(errors.UserError):
-    """missing name for `@label` directive"""
+class INVALID_LABEL_NAME(TokenError):
+    """`@label` name must be a single-part token (has {actual} parts)"""
+
+
+class INVALID_LABEL_POSITION(TokenError):
+    """`@label` position must be a single-part token (has {actual} parts)"""
 
 
 class MISSING_BRACE(errors.UserError):
@@ -25,16 +30,16 @@ class UNRECOGNIZED_GROUP_NAME(errors.MappingError):
     """unrecognized group name `{key}`"""
 
 
-class GROUPNAME_MISSING(errors.UserError):
-    """missing group name"""
-
-
-class GROUPNAME_EXTRA(errors.UserError):
-    """junk after group name"""
+class GROUPNAME_SINGLE(TokenError):
+    """group name must be a single, single-part token"""
 
 
 class UNMATCHED_BRACE(errors.UserError):
     """unmatched closing brace"""
+
+
+class BAD_LINE_START(TokenError):
+    """directive or struct name must be single-part token (has {actual} parts)"""
 
 
 class DIRECTIVE_INSIDE_CHUNK(errors.UserError):
@@ -53,20 +58,20 @@ class DUPLICATE_CHUNK_LOCATION(errors.MappingError):
     """duplicate definition for chunk at 0x{key:X}"""
 
 
-def _resolve_labels_sub(part, label_lookup):
-    if not part.startswith('@'):
-        return part
-    label = part[1:]
+def _resolve_labels_sub(subtoken, label_lookup):
+    if not subtoken.startswith('@'):
+        return subtoken
+    label = subtoken[1:]
     return str(UNRECOGNIZED_LABEL.get(label_lookup, label))
     # It will get converted back to int later. FIXME this parsing is hax
 
 
 def _resolve_labels(line, label_lookup):
     return [
-        ', '.join(
-            _resolve_labels_sub(part.strip(), label_lookup)
-            for part in token.split(',')
-        )
+        [
+            _resolve_labels_sub(subtoken, label_lookup)
+            for subtoken in token
+        ]
         for token in line
     ]
 
@@ -127,23 +132,18 @@ class SourceLoader:
 
 
     def _process_label(self, tokens):
-        count = len(tokens)
-        LABEL_TOOMANYARGS.require(count <= 2)
-        LABEL_NONAME.require(count > 0)
-        if count == 2:
-            name, position = tokens
+        name, position = INVALID_LABEL.pad(tokens, 1, 2)
+        name, = INVALID_LABEL_NAME.pad(name, 1, 1)
+        if position is not None:
+            position, = INVALID_LABEL_POSITION.pad(position, 1, 1)
             self.position = errors.parse_int(position)
-        else:
-            assert count == 1
-            # Use the existing value for self.position.
-            name, = tokens
         self.labels[name] = self.position
 
 
     def _verify_brace(self, tokens, dname):
         MISSING_BRACE.require(bool(tokens), directive=dname)
         *args, brace = tokens
-        MISSING_BRACE.require(brace == '{', directive=dname)
+        MISSING_BRACE.require(brace == ['{'], directive=dname)
         return args
 
 
@@ -163,11 +163,10 @@ class SourceLoader:
     def _process_group(self, tokens):
         assert self.current_chunk is None
         tokens = self._verify_brace(tokens, 'group')
-        count = len(tokens)
-        GROUPNAME_MISSING.require(count > 0)
-        GROUPNAME_EXTRA.require(count < 2)
+        tokens, = GROUPNAME_SINGLE.pad(tokens, 1, 1) # single token...
+        tokens, = GROUPNAME_SINGLE.pad(tokens, 1, 1) # with a single part
         self.current_chunk = Chunk(
-            self.position, self._get_filters(), self._get_group(tokens[0])
+            self.position, self._get_filters(), self._get_group(tokens)
         )
 
 
@@ -191,6 +190,9 @@ class SourceLoader:
         # Indentation is irrelevant.
         assert tokens # empty lines were preprocessed out.
         first, *rest = tokens
+        # FIXME: relax this restriction if/when implicit struct names
+        # are implemented for single-struct groups.
+        first, = BAD_LINE_START.pad(first, 1, 1)
         if first.startswith('@'):
             DIRECTIVE_INSIDE_CHUNK.require(self.current_chunk is None)
             self._dispatch(first[1:], rest)

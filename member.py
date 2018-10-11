@@ -1,5 +1,6 @@
 import errors
 from field import make_field
+from line_parsing import TokenError
 from functools import partial
 
 
@@ -27,8 +28,12 @@ class INVALID_OPTION_SIZE(errors.UserError):
     """`option` size must be a multiple of 8 bits"""
 
 
-class JUNK_AFTER_OPTION(errors.UserError):
+class BAD_OPTION(TokenError):
     """junk data after option name"""
+
+
+class BAD_OPTION_NAME(TokenError):
+    """option name token must be single-part (has {actual} parts)"""
 
 
 class Option:
@@ -71,18 +76,6 @@ class Option:
         )
 
 
-def _collect(items):
-    result = ', '.join(items)
-    if result != ''.join(result.split()): # embedded whitespace
-        result = f'[{result}]'
-    return result
-
-
-def _itemize(raw):
-    # N.B. Even if there's no whitespace, there could still be multiple params.
-    return [x.strip() for x in raw.split(',')]
-
-
 def _build_option_map(options):
     result = {}
     sizes = set()
@@ -104,7 +97,9 @@ class Member:
 
 
     def _format(self, value, disassembler, name):
-        return _collect(NO_MATCHING_OPTION.first_not_none(
+        # The disassembler will wrap these tokens in [] if needed and clean
+        # up the final output.
+        return ', '.join(NO_MATCHING_OPTION.first_not_none(
             option.format(
                 int.from_bytes(value, 'little'), disassembler, name
             )
@@ -119,16 +114,15 @@ class Member:
         )
 
 
-    def _parse(self, raw):
-        items = _itemize(raw)
-        parser = INVALID_PARAMETER_COUNT.get(self.option_map, len(items))
-        return parser.parse(items).to_bytes(self.size, 'little')
+    def _parse(self, subtokens):
+        parser = INVALID_PARAMETER_COUNT.get(self.option_map, len(subtokens))
+        return parser.parse(subtokens).to_bytes(self.size, 'little')
 
 
-    def parse(self, raw, name):
+    def parse(self, subtokens, name):
         return errors.wrap(
             f'Member {name} (of type {self.typename})',
-            self._parse, raw
+            self._parse, subtokens
         )
 
 
@@ -168,8 +162,8 @@ class MemberLSM:
 
 
     def add_line(self, line_tokens):
-        name, *junk = line_tokens
-        JUNK_AFTER_OPTION.require(not junk)
+        name, = BAD_OPTION.pad(line_tokens, 1, 1)
+        name, = BAD_OPTION_NAME.pad(name, 1, 1)
         self.option_names.append(name)
 
 

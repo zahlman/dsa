@@ -22,7 +22,7 @@ def process(lines):
             yield position, indent, tokenize(line)
         else:
             assert position == 0
-        position, indent, line = i, raw_indent, raw_line
+        position, indent, line = i, raw_indent, contents
     # At EOF, yield the final chunk.
     yield position, indent, tokenize(line)
 

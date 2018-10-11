@@ -1,5 +1,5 @@
 import errors
-from line_parsing import parts_of
+import line_parsing
 from functools import partial
 import re
 
@@ -28,8 +28,13 @@ class DUPLICATE_FLAG(errors.UserError):
     """duplicate flag names not allowed"""
 
 
-class MULTIPLE_TOKENS_INVALID(errors.UserError):
-    """{thing} must be a single token (use [] to group multiple words)"""
+class INVALID_RANGE(line_parsing.TokenError):
+    """invalid range (token should have 1..2 parts, has {actual})"""
+
+
+class SINGLE_TOKEN_REQUIRED(errors.UserError):
+    """{thing} must be a single, single-part token
+    (use `[]` to group multiple words; `,` and `:` are not allowed)"""
 
 
 class UnlabelledRange:
@@ -56,14 +61,28 @@ class LabelledRange:
         self.pattern = re.compile(
             f'(?:{re.escape(label)})(?:<(.*)>)?$'
         )
+        self.baseline = (
+            low if low is not None
+            else high if high is not None
+            else 0
+        )
+        self.definite = (low == high == self.baseline)
+
+
+    def _in_range(self, value):
+        if self.low is not None and value < self.low:
+            return False
+        if self.high is not None and value > self.high:
+            return False
+        return True
 
 
     def format(self, value, convert):
-        low, high, label = self.low, self.high, self.label
-        if not low <= value <= high:
-            # There could be another range that the value fits into.
-            return None
-        return label if low == high else f'{label}<{convert(value - low)}>'
+        return (
+            None if not self._in_range(value) # try another range.
+            else self.label if self.definite
+            else f'{self.label}<{convert(value - self.baseline)}>'
+        )
 
 
     def _convert_offset(self, param):
@@ -80,8 +99,8 @@ class LabelledRange:
         if match is None:
             return None
         # If the regex matched, the text can't match a different range.
-        value = self.low + self._convert_offset(match.group(1))
-        PARAMETER_OUT_OF_RANGE.require(self.low <= value <= self.high)
+        value = self.baseline + self._convert_offset(match.group(1))
+        PARAMETER_OUT_OF_RANGE.require(self._in_range(value))
         return value
 
 
@@ -109,6 +128,9 @@ class EnumDescription:
         )
 
 
+_flag_splitter = line_parsing.token_splitter('|')
+
+
 class FlagsDescription:
     def __init__(self, names):
         self.names = names
@@ -124,8 +146,9 @@ class FlagsDescription:
 
     def parse(self, text):
         value = 0
-        items = [t.strip() for t in text.split('|')]
+        items = _flag_splitter(text)
         set_flags = set(items)
+        # FIXME: check for junk flags etc.
         DUPLICATE_FLAG.require(len(items) == len(set_flags))
         for i, name in enumerate(self.names):
             if name in set_flags:
@@ -153,6 +176,22 @@ class RawDescription:
 Raw = RawDescription()
 
 
+def _parse_range(token):
+    low, high = INVALID_RANGE.pad(token, 1, 2)
+    if high is None:
+        high = low
+    return (
+        errors.parse_optional_int(low, 'low end of range'),
+        errors.parse_optional_int(high, 'high end of range')
+    )
+
+
+def _get_single(token, thing):
+    SINGLE_TOKEN_REQUIRED.require(len(token) == 1, thing=thing)
+    SINGLE_TOKEN_REQUIRED.require(len(token[0]) == 1, thing=thing)
+    return token[0][0]
+
+
 class EnumDescriptionLSM:
     """Helper used by TypeDescriptionLSM."""
     def __init__(self):
@@ -161,15 +200,9 @@ class EnumDescriptionLSM:
 
     def add_line(self, line_tokens):
         values, *label = line_tokens
-        low, high = parts_of(values, ':', 1, 2, False)
-        if high is None:
-            high = low
-        MULTIPLE_TOKENS_INVALID.require(len(label) <= 1, thing='enum name')
-        self.ranges.append((
-            errors.parse_int(low, 'low end of range'),
-            errors.parse_int(high, 'high end of range'),
-            label[0] if label else None
-        ))
+        low, high = _parse_range(values)
+        label = _get_single(label, 'enum name') if label else None
+        self.ranges.append((low, high, label))
 
 
     def result(self):
@@ -183,9 +216,7 @@ class FlagsDescriptionLSM:
 
 
     def add_line(self, line_tokens):
-        assert len(line_tokens) > 0 # empty lines were preprocessed out.
-        MULTIPLE_TOKENS_INVALID.require(len(line_tokens) <= 1, thing='flag')
-        self.names.append(line_tokens[0])
+        self.names.append(_get_single(line_tokens, 'flag'))
 
 
     def result(self):

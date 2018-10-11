@@ -1,4 +1,5 @@
 import errors
+from line_parsing import TokenError
 import re
 
 
@@ -32,6 +33,10 @@ class CHUNK_TOO_BIG(errors.UserError):
 
 class CHUNK_TOO_SMALL(errors.UserError):
     """not enough structs in chunk"""
+
+
+class MULTIPART_STRUCT_NAME(TokenError):
+    """struct name token must be single-part (has {actual} parts)"""
 
 
 # Doesn't quite fit the pattern for a MappingError.
@@ -202,6 +207,7 @@ class StructGroup:
         followers = self.graph[previous]
         # Name extraction can't fail, since empty lines are skipped.
         name, *tokens = tokens
+        name, = MULTIPART_STRUCT_NAME.pad(name, 1, 1)
         INVALID_FOLLOWER.require(
             name in followers, name=name, followers=followers
         )

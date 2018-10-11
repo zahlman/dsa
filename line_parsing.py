@@ -4,12 +4,35 @@ from functools import partial
 import re, textwrap
 
 
-class NOT_ENOUGH_PARTS(errors.UserError):
-    """not enough parts for multipart token"""
+class TokenError(errors.UserError):
+    # Represents an error in the number of tokens on a line or the number of
+    # parts of a token.
+    @classmethod
+    def pad(cls, token, required, total, **kwargs):
+        actual = len(token)
+        if required <= actual <= total:
+            return token + ([None] * (total - actual))
+        raise cls(actual=actual, **kwargs)
 
 
-class TOO_MANY_PARTS(errors.UserError):
-    """too many parts for multipart token"""
+class LineError(errors.UserError):
+    def __init__(self, **kwargs):
+        space = ' ' * kwargs['position']
+        super().__init__(space=space, **kwargs)
+
+
+class UNMATCHED_BRACKET(LineError):
+    """Character {position}: unmatched `{bracket}`
+    {line}
+    {space}^
+    (N.B. brackets may not be nested)"""
+
+
+class EMPTY_TOKEN(LineError):
+    """Character {position}: empty token
+    {line}
+    {space}^
+    (N.B. use `0` for empty sets of flags)"""
 
 
 class DUPLICATE_PARAMETER(errors.MappingError):
@@ -48,36 +71,46 @@ class INVALID_TERMINATOR(errors.UserError):
     """invalid terminator format"""
 
 
-token = re.compile('(?:\[[^\[\]]*\])|(?:[^ \t\[\]]+)')
+def _normalize(token):
+    return ' '.join(token.split())
+
+
+def token_splitter(delims):
+    # Also used by description.FlagsDescription to parse `|`s.
+    return re.compile(f'\s*[{re.escape(delims)}]\s*').split
+
+
+_split = token_splitter(':,')
+
+
+_tokenizer = re.compile('|'.join((
+    r'(?:(?P<plain>[^\s\[\]]+)\s*)',
+    r'(?:\[(?P<bracketed>[^\[\]]*)\]\s*)',
+    r'(?P<unmatched>.)'
+)))
+
+
+def _token_gen(line):
+    # Leading whitespace was handled in file_parsing.
+    for match in _tokenizer.finditer(line):
+        # Exactly one group should match.
+        groupname = match.lastgroup
+        text = match.group(groupname)
+        position = match.start()
+        UNMATCHED_BRACKET.require(
+            groupname != 'unmatched',
+            position=position, bracket=text, line=line
+        )
+        text = _normalize(text)
+        EMPTY_TOKEN.require(bool(text), position=position, line=line)
+        yield _split(text)
 
 
 def tokenize(line):
-    # Also normalizes whitespace within bracketed tokens.
-    # We need to do this to avoid e.g. issues with multi-word identifiers
-    # (like 'foo bar' not matching 'foo\tbar'), which gets that much hairier
-    # with line-wrapping involved.
-    return [
-        x[1:-1] if x.startswith('[') else x
-        for x in token.findall(' '.join(line.split()))
-    ]
-
-
-# FIXME
-def parts_of(token, separator, required, allowed, last_list):
-    parts = [
-        x.strip() if x.strip() else None
-        for x in token.split(separator)
-    ]
-    count = len(parts)
-    NOT_ENOUGH_PARTS.require(count >= required)
-    if count < allowed:
-        padding = allowed - count - (1 if last_list else 0)
-        parts.extend([None] * padding)
-    if last_list: # group up the last token, even if padding occurred.
-        parts = parts[:allowed-1] + [parts[allowed-1:]]
-    else:
-        TOO_MANY_PARTS.require(count <= allowed)
-    return parts
+    result = list(_token_gen(line))
+    assert len(result) > 0 # empty lines should have been stripped.
+    assert [] not in result # empty tokens should have raised an exception.
+    return result
 
 
 # Used as the final step in producing output when disassembling.
@@ -118,7 +151,7 @@ def arguments(tokens, parameters):
     result, converters = _split_whitelist(parameters)
     specified = {}
     for token in tokens:
-        name, item = parts_of(token, ':', 1, 2, True)
+        name, *item = token
         DUPLICATE_PARAMETER.add_unique(
             specified, name,
             UNRECOGNIZED_PARAMETER.get(converters, name)(item)
