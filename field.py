@@ -43,16 +43,6 @@ class FieldTranslation:
         return 1 << (self.bits - 1)
 
 
-    @property
-    def minimum(self):
-        return (-self.halfcount if self.signed else 0) * self.stride + self.bias
-
-
-    @property
-    def maximum(self):
-        return ((self.halfcount if self.signed else self.count) - 1) * self.stride + self.bias
-
-
     # Convert unsigned value from the data into one that will be formatted.
     def value(self, raw):
         assert 0 <= raw < self.count
@@ -64,7 +54,6 @@ class FieldTranslation:
     # Convert value computed from parsing into one stored in the data.
     def raw(self, value):
         # Should be guaranteed by the underlying Description(s).
-        assert self.minimum <= value <= self.maximum
         value, remainder = divmod(value - self.bias, self.stride)
         UNALIGNED_POINTER.require(not remainder)
         if self.signed and value < 0:
