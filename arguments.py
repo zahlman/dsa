@@ -4,12 +4,16 @@ import binascii
 from functools import partial
 
 
-class DUPLICATE_PARAMETER(errors.UserError):
-    """duplicate specification of parameter `{name}`"""
+class DUPLICATE_PARAMETER(errors.MappingError):
+    """duplicate specification of parameter `{key}`"""
 
 
 class UNRECOGNIZED_PARAMETER(errors.MappingError):
     """unrecognized parameter `{key}`"""
+
+
+class MISSING_PARAMETERS(errors.UserError):
+    """missing required parameters `{missing}`"""
 
 
 class MUST_BE_SINGLE_ITEM(errors.UserError):
@@ -36,17 +40,38 @@ class INVALID_TERMINATOR(errors.UserError):
     """invalid terminator format"""
 
 
-def parameters(whitelist, tokens):
-    result = {}
-    specified = set()
+class Namespace:
+    def __init__(self, items):
+        for key, value in items.items():
+            setattr(self, key, value)
+
+
+def _split_whitelist(w):
+    defaults = {}
+    converters = {}
+    for k, v in w.items():
+        if callable(v):
+            converters[k] = v
+        else:
+            c, d = v
+            converters[k] = c
+            defaults[k] = d
+    return defaults, converters
+
+
+def arguments(tokens, parameters):
+    result, converters = _split_whitelist(parameters)
+    specified = {}
     for token in tokens:
         name, item = parts_of(token, ':', 1, 2, True)
-        if not item: # Shortcut for boolean flags
-            item = ['True']
-        DUPLICATE_PARAMETER.require(name not in specified, name=name)
-        specified.add(name)
-        result[name] = UNRECOGNIZED_PARAMETER.get(whitelist, name)(item)
-    return result
+        DUPLICATE_PARAMETER.add_unique(
+            specified, name,
+            UNRECOGNIZED_PARAMETER.get(converters, name)(item)
+        )
+    result.update(specified)
+    missing = set(converters.keys()) - set(result.keys())
+    MISSING_PARAMETERS.require(not missing, missing=missing)
+    return Namespace(result)
 
 
 # "types" for flag values.
@@ -76,6 +101,8 @@ def positive_integer(items):
 
 
 def boolean(items):
+    if not items:
+        return True # shortcut syntax
     text = string(items)
     return INVALID_BOOLEAN.get({'true': True, 'false': False}, text.lower())
 

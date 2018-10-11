@@ -1,4 +1,4 @@
-from arguments import base, boolean, integer, parameters, string
+from arguments import arguments, base, boolean, integer, string
 from description import Raw
 import errors
 from parse_config import parts_of
@@ -104,25 +104,24 @@ def make_field(line_tokens, description_lookup):
     bnf, *flag_tokens = line_tokens
     bits, name, fixed = parts_of(bnf, ':', 1, 3, False)
     bits = errors.parse_int(bits, 'bit count')
-    params = parameters(
+    args = arguments(
+        flag_tokens,
         {
-            'bias': integer, 'signed': boolean, 'base': base,
-            'referent': string, 'values': string
-        },
-        flag_tokens
+            # TODO: use `stride`.
+            'bias': (integer, 0), 'stride': (integer, 1),
+            'signed': (boolean, False), 'base': (base, hex),
+            'values': (string, None), 'referent': (string, None)
+        }
     )
-    referent = params.get('referent', None)
     field = Field(
-        translation=FieldTranslation(
-            bits, params.get('bias', 0), params.get('signed', False)
+        translation=FieldTranslation(bits, args.bias, args.signed),
+        formatter=args.base,
+        description=Raw if args.values is None else MISSING_DESCRIPTION.get(
+            description_lookup, args.values
         ),
-        formatter=params.get('base', hex),
-        description=MISSING_DESCRIPTION.get(
-            description_lookup, params['values']
-        ) if 'values' in params else Raw,
-        referent=referent
+        referent=args.referent
     )
     if fixed is not None:
-        FIXED_REFERENT.require(referent is None)
+        FIXED_REFERENT.require(args.referent is None)
         fixed = field.parse(fixed)
     return name, field, fixed, bits

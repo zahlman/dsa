@@ -117,16 +117,13 @@ def _normalized_graph(graph, first):
 
 
 class StructGroup:
-    def __init__(
-        self, structs, graph,
-        first=None, align=4, endian='little', size=None, terminator=None
-    ):
+    def __init__(self, structs, graph, options):
         self.structs = structs # TODO: optimized dispatch
-        self.alignment = align
-        self.endian = endian # TODO: implement big-endian
-        self.size = size
-        self.terminator = terminator
-        self.graph = _normalized_graph(graph, first)
+        self.alignment = options.align
+        self.endian = options.endian # TODO: implement big-endian
+        self.size = options.size
+        self.terminator = options.terminator
+        self.graph = _normalized_graph(graph, options.first)
 
 
     @property

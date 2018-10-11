@@ -1,4 +1,4 @@
-from arguments import boolean, hexdump, parameters, positive_integer, one_of
+from arguments import arguments, boolean, hexdump, positive_integer, one_of
 import errors
 from parse_config import parts_of
 from structs import Struct, StructGroup
@@ -42,24 +42,26 @@ class DUPLICATE_GROUP(errors.MappingError):
 
 
 def parse_options(line_tokens):
-    return parameters({
-        'align': positive_integer,
+    return arguments(line_tokens, {
+        'align': (positive_integer, 1),
         'endian': one_of('big', 'little'),
-        'first': set,
-        'size': positive_integer,
-        'terminator': hexdump
-    }, line_tokens)
+        'first': (set, None),
+        'size': (positive_integer, None),
+        'terminator': (hexdump, None)
+    })
 
 
 def parse_struct_header(line_tokens):
     name, *flag_tokens = line_tokens # TODO: support for aliases
-    options = parameters({'next': set, 'last': boolean}, flag_tokens)
-    if 'last' in options:
-        NEXT_LAST_CONFLICT.require('next' not in options)
+    options = arguments(
+        flag_tokens, {'next': (set, None), 'last': (boolean, False)}
+    )
+    if options.last:
+        NEXT_LAST_CONFLICT.require(options.next is None)
         return name, set()
-    if 'next' in options:
-        return name, options['next']
-    return name, None # no restrictions; full list filled in later.
+    # If nothing is specified, the None value is passed through and will be
+    # replaced later with a set of all possibilities.
+    return name, options.next
 
 
 class StructData:
@@ -118,7 +120,7 @@ class StructGroupDescriptionLSM:
 
     def _new_struct(self, line_tokens):
         self._push_old_struct()
-        self.struct_data = StructData(line_tokens, self.options.get('align', 1))
+        self.struct_data = StructData(line_tokens, self.options.align)
 
 
     def add_line(self, indent, line_tokens):
@@ -136,7 +138,7 @@ class StructGroupDescriptionLSM:
         NO_STRUCTS.require(bool(self.structs))
         DUPLICATE_GROUP.add_unique(
             accumulator, label, StructGroup(
-                self.structs, self.graph, **self.options
+                self.structs, self.graph, self.options
             )
         )
         self._reset()
