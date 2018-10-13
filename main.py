@@ -1,7 +1,7 @@
 from assembly import SourceLoader
 import errors
 from file_parsing import load_globs, load_file
-from line_parsing import format_line
+from line_parsing import format_line, wrap_multiword
 from structgroup_loader import StructGroupDescriptionLSM
 from type_loader import TypeDescriptionLSM
 from functools import partial
@@ -90,7 +90,7 @@ class Disassembler:
 
 
     def _write_chunk(self, outfile, location):
-        group_name = self.used_groups[location]
+        group_name = wrap_multiword(self.used_groups[location])
         size = self.sizes[location]
         chunk = self.chunks[location]
         outfile.write(f'@filter size {size} {{\n')
@@ -103,7 +103,7 @@ class Disassembler:
 
     def _dump(self, outfile):
         for location in sorted(self.labels.keys()):
-            label = self.labels[location]
+            label = wrap_multiword(self.labels[location])
             outfile.write(f'@label {label} 0x{location:X}\n')
             if location in self.chunks:
                 self._write_chunk(outfile, location)

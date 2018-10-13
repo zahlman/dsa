@@ -113,12 +113,13 @@ def tokenize(line):
     return result
 
 
+def wrap_multiword(token):
+    return token if token == ''.join(token.split()) else f'[{token}]'
+
+
 # Used as the final step in producing output when disassembling.
 def format_line(tokens):
-    tokens = [
-        t if t == ''.join(t.split()) else f'[{t}]'
-        for t in tokens
-    ]
+    tokens = list(map(wrap_multiword, tokens))
     return textwrap.wrap(
         ' '.join(tokens), width=78,
         # Indicate the wrapped lines according to spec.
