@@ -135,7 +135,11 @@ def _load_paths(pathfile):
     }
     with open(pathfile) as f:
         for line in f:
-            category, path = line.split()
+            line, mark, comment = line.partition('#')
+            line = line.strip()
+            if not line:
+                continue
+            category, path = line.split(None, 1)
             UNRECOGNIZED_PATH_TYPE.get(paths, category).append(path)
     return paths
 
