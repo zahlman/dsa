@@ -178,7 +178,3 @@ def dsd():
             _reassemble, args['binary'], args['output'], language, True
         )
         print(f"Verification: {'OK' if result == data else 'failed'}.")
-
-
-if __name__ == '__main__':
-    dsa()
