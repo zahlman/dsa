@@ -20,7 +20,7 @@ def _timed(action, *args):
     return result
 
 
-def _load_args(prog, description, *argspecs):
+def load_args(prog, description, *argspecs):
     parser = argparse.ArgumentParser(prog=prog, description=description)
     for *names, helptext, kwargs in argspecs:
         parser.add_argument(*names, help=helptext, **kwargs)
@@ -162,7 +162,7 @@ def dsa(binary, source, paths, output=None):
 
 
 def dsa_cli():
-    _dsa(_load_args(
+    _dsa(load_args(
         'dsa',
         'Data Structure Assembler - assembly mode',
         *_assembly_args, *_config_paths
@@ -196,7 +196,7 @@ def dsd(binary, root, output, paths, verify):
 
 
 def dsd_cli():
-    _dsd(_load_args(
+    _dsd(load_args(
         'dsd',
         'Data Structure Assembler - disassembly mode',
         *_disassembly_args, *_config_paths
