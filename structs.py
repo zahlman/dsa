@@ -78,6 +78,11 @@ class Struct:
         self.names = tuple(names)
 
 
+    @property
+    def size(self):
+        return len(self.template)
+
+
     def format_from(self, source, position, disassembler):
         match = self.pattern.match(source, position)
         if match is None:
@@ -88,7 +93,7 @@ class Struct:
             for member, name, value in zip(
                 self.members, self.names, match.groups()
             )
-        ), len(self.template)
+        ), self.size
 
 
     def parse(self, tokens):
@@ -217,3 +222,12 @@ class StructGroup:
     def parse_end(self, count):
         CHUNK_TOO_SMALL.require(self.size is None or count >= self.size)
         return b'' if self.terminator is None else self.terminator
+
+
+    # Methods used by the assembler to determine the expected size of a chunk
+    # without doing any actual assembly.
+    def struct_size(self, name):
+        try:
+            return self.structs[name].size
+        except: # Bad struct name? Wait until assembly to report the error.
+            return 0

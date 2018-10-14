@@ -76,24 +76,18 @@ def _resolve_labels(line, label_lookup):
     ]
 
 
-class _DummyLookup(dict):
-    def __missing__(self, key):
-        return 0
-
-
-_dummy_lookup = _DummyLookup()
-
-
 class Chunk:
     def __init__(self, location, filters, group):
         self.location = location
         self.filters = filters
         self.group = group
         self.lines = []
+        self.size = group.terminator_size
 
 
     def add_line(self, tokens):
         self.lines.append(tokens)
+        self.size += self.group.struct_size(tokens[0][0])
 
 
     def complete(self, label_lookup):
@@ -176,9 +170,7 @@ class SourceLoader:
             # Estimate position after the chunk.
             # This will *normally* give the correct value, but some
             # filters could conceivably mess it up.
-            location, value = chunk.complete(_dummy_lookup)
-            assert location == self.position
-            self.position += len(value)
+            self.position += chunk.size
             # Push chunk onto a list to be properly resolved later.
             self.chunks.append(chunk)
             self.current_chunk = None
