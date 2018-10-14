@@ -104,7 +104,7 @@ class StructData:
         self.member_data.append((member, name, fixed))
 
 
-class StructGroupDescriptionLSM:
+class StructGroupLoader:
     def __init__(self, types):
         self.types = types
         self._reset()

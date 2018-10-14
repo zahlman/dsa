@@ -1,7 +1,7 @@
-from .description import EnumDescriptionLSM, FlagsDescriptionLSM
+from .description import EnumDescriptionLoader, FlagsDescriptionLoader
 from . import errors
 from . import line_parsing
-from .member import OptionLSM, MemberLSM
+from .member import OptionLoader, MemberLoader
 
 
 class INVALID_SECTION_TYPE(line_parsing.TokenError):
@@ -32,7 +32,7 @@ class DUPLICATE_TYPE(errors.MappingError):
     """duplicate definition for type `{key}`"""
 
 
-class TypeDescriptionLSM:
+class TypeLoader:
     def __init__(self):
         self._reset()
 
@@ -47,10 +47,10 @@ class TypeDescriptionLSM:
     def _categorize(self, section_type):
         return UNKNOWN_SECTION_TYPE.get(
             {
-                'flags': (FlagsDescriptionLSM, self.values),
-                'enum': (EnumDescriptionLSM, self.values),
-                'option': (OptionLSM, self.options),
-                'type': (MemberLSM, self.types)
+                'flags': (FlagsDescriptionLoader, self.values),
+                'enum': (EnumDescriptionLoader, self.values),
+                'option': (OptionLoader, self.options),
+                'type': (MemberLoader, self.types)
             }, section_type
         )
 

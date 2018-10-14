@@ -192,8 +192,8 @@ def _get_single(token, thing):
     return token[0][0]
 
 
-class EnumDescriptionLSM:
-    """Helper used by TypeDescriptionLSM."""
+class EnumDescriptionLoader:
+    """Helper used by TypeDescriptionLoader."""
     def __init__(self):
         self.ranges = []
 
@@ -209,8 +209,8 @@ class EnumDescriptionLSM:
         return EnumDescription(self.ranges)
 
 
-class FlagsDescriptionLSM:
-    """Helper used by TypeDescriptionLSM."""
+class FlagsDescriptionLoader:
+    """Helper used by TypeDescriptionLoader."""
     def __init__(self):
         self.names = []
 

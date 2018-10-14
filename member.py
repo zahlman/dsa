@@ -134,7 +134,7 @@ class Member:
         )
 
 
-class OptionLSM:
+class OptionLoader:
     def __init__(self):
         self.field_makers = []
 
@@ -164,7 +164,7 @@ class OptionLSM:
         )
 
 
-class MemberLSM:
+class MemberLoader:
     def __init__(self):
         self.option_names = []
 
