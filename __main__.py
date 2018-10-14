@@ -1,9 +1,15 @@
-from .file_parsing import load_globs
-from . import main
+from .assembly import SourceLoader
+from . import errors
+from .file_parsing import load_file, load_globs
+from .main import Disassembler
 from .structgroup_loader import StructGroupDescriptionLSM
 from .type_loader import TypeDescriptionLSM
 import argparse
 from time import time
+
+
+class UNRECOGNIZED_PATH_TYPE(errors.MappingError):
+    """unrecognized path type `{key}`"""
 
 
 def _timed(action, *args):
@@ -35,7 +41,7 @@ def _populate_paths(paths, filename):
             if not line:
                 continue
             category, path = line.split(None, 1)
-            main.UNRECOGNIZED_PATH_TYPE.get(paths, category).append(path)
+            UNRECOGNIZED_PATH_TYPE.get(paths, category).append(path)
 
 
 def _load_paths(options):
@@ -49,17 +55,28 @@ def _load_paths(options):
     return paths
 
 
-_base_args = [
-    ['binary', 'binary source file to disassemble from', {}],
-    ['output', 'output file name', {}]
-]
-
-
-_disassembly_root = [
+_disassembly_args = [
+    ['binary', 'source binary file to disassemble from', {}],
+    ['output', 'output file name', {}],
     [
         'root',
         'structgroup name and offset for root chunk, e.g. `example:0x123`',
         {}
+    ],
+    [
+        '-v', '--verify',
+        'try re-assembling the output and comparing to the source',
+        {'nargs': '?', 'const': True, 'default': False}
+    ]
+]
+
+
+_assembly_args = [
+    ['binary', 'source binary file to assemble into', {}],
+    ['input', 'name of file to assemble', {}],
+    [
+        '-o', '--output', 'binary file to write (if not overwriting source)',
+        {'nargs': '?'}
     ]
 ]
 
@@ -108,20 +125,59 @@ def _get_data(source):
         return f.read()
 
 
+def _reassemble(infilename, outfilename, language, verbose):
+    chunks = load_file(SourceLoader(language), outfilename)
+    with open(infilename, 'rb') as f:
+        data = bytearray(f.read())
+    for position, chunk in chunks.items():
+        if verbose:
+            print(f'Test writing {len(chunk)} bytes at 0x{position:X}')
+        data[position:position+len(chunk)] = chunk
+    return bytes(data)
+
+
+def _do_output(to_write, binary):
+    with open(binary, 'wb') as f:
+        f.write(to_write)
+
+
 def dsa():
+    args = _load_args(
+        'dsd',
+        'Data Structure Assembler - assembly mode',
+        *_assembly_args, *_config_paths
+    )
+    paths = _load_paths(args)
+    data = _timed(_get_data, args['binary'])
+    language = _load_language(paths)
+    print("Assembling...")
+    result = _timed(
+        _reassemble, args['binary'], args['input'], language, False
+    )
+    print("Writing to output...")
+    _timed(_do_output, result, args['output'] or args['binary'])    
+
+
+def dsd():
     args = _load_args(
         'dsa',
         'Data Structure Assembler - disassembly mode',
-        *_base_args, *_disassembly_root, *_config_paths
+        *_disassembly_args, *_config_paths
     )
     paths = _load_paths(args)
-    group_name, position = _parse_entry_point(args['root'])
     data = _timed(_get_data, args['binary'])
     language = _load_language(paths)
+    group_name, position = _parse_entry_point(args['root'])
     print('Setting up...')
-    d = _timed(main.Disassembler, language, group_name, position, 'main')
+    d = _timed(Disassembler, language, group_name, position, 'main')
     print('Disassembling...')
     _timed(d, data, args['output'])
+    if args['verify']:
+        print('Reassembling for verification...')
+        result = _timed(
+            _reassemble, args['binary'], args['output'], language, True
+        )
+        print(f"Verification: {'OK' if result == data else 'failed'}.")
 
 
 if __name__ == '__main__':
