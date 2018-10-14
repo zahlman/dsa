@@ -1,6 +1,6 @@
-from description import Raw
-import errors
-from line_parsing import arguments, base, boolean, integer, string, TokenError
+from .description import Raw
+from . import errors
+from .line_parsing import arguments, base, boolean, integer, string, TokenError
 from functools import partial
 
 

@@ -1,6 +1,6 @@
-import errors
-from line_parsing import arguments, boolean, hexdump, one_of, positive_integer, TokenError
-from structs import Struct, StructGroup
+from . import errors
+from .line_parsing import arguments, boolean, hexdump, one_of, positive_integer, TokenError
+from .structs import Struct, StructGroup
 from collections import OrderedDict
 
 

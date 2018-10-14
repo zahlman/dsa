@@ -1,5 +1,5 @@
-import errors
-from line_parsing import tokenize
+from . import errors
+from .line_parsing import tokenize
 from functools import lru_cache, partial
 import glob, os
 

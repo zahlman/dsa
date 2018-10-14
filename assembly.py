@@ -1,5 +1,5 @@
-import errors
-from line_parsing import TokenError
+from . import errors
+from .line_parsing import TokenError
 
 
 class UNRECOGNIZED_LABEL(errors.MappingError):

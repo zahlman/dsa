@@ -1,7 +1,7 @@
-from description import EnumDescriptionLSM, FlagsDescriptionLSM
-import errors
-import line_parsing
-from member import OptionLSM, MemberLSM
+from .description import EnumDescriptionLSM, FlagsDescriptionLSM
+from . import errors
+from . import line_parsing
+from .member import OptionLSM, MemberLSM
 
 
 class INVALID_SECTION_TYPE(line_parsing.TokenError):

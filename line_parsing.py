@@ -1,4 +1,4 @@
-import errors
+from . import errors
 import binascii
 from functools import partial
 import re, textwrap

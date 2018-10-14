@@ -1,9 +1,9 @@
-from assembly import SourceLoader
-import errors
-from file_parsing import load_globs, load_file
-from line_parsing import format_line, wrap_multiword
-from structgroup_loader import StructGroupDescriptionLSM
-from type_loader import TypeDescriptionLSM
+from .assembly import SourceLoader
+from . import errors
+from .file_parsing import load_globs, load_file
+from .line_parsing import format_line, wrap_multiword
+from .structgroup_loader import StructGroupDescriptionLSM
+from .type_loader import TypeDescriptionLSM
 from functools import partial
 from itertools import count
 from time import time
