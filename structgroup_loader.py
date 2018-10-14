@@ -53,7 +53,7 @@ def parse_options(line_tokens):
         'align': (positive_integer, 1),
         'endian': one_of('big', 'little'),
         'first': (set, None),
-        'size': (positive_integer, None),
+        'count': (positive_integer, None),
         'terminator': (hexdump, None)
     })
 

@@ -126,7 +126,7 @@ class StructGroup:
         self.structs = structs # TODO: optimized dispatch
         self.alignment = options.align
         self.endian = options.endian # TODO: implement big-endian
-        self.size = options.size
+        self.size = options.count
         self.terminator = options.terminator
         self.graph = _normalized_graph(graph, options.first)
 
