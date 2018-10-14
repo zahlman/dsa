@@ -1,9 +1,9 @@
 from .assembly import SourceLoader
+from .disassembly import Disassembler
 from . import errors
 from .file_parsing import load_file, load_globs
-from .main import Disassembler
-from .structgroup_loader import StructGroupDescriptionLSM
-from .type_loader import TypeDescriptionLSM
+from .structgroup_loader import StructGroupLoader
+from .type_loader import TypeLoader
 import argparse
 from time import time
 
@@ -109,12 +109,12 @@ _config_paths = [
 def _load_language(paths):
     print('Loading types...')
     types = _timed(
-        load_globs, TypeDescriptionLSM(),
+        load_globs, TypeLoader(),
         paths['lib_types'], paths['usr_types']
     )
     print('Loading language...')
     return _timed(
-        load_globs, StructGroupDescriptionLSM(types),
+        load_globs, StructGroupLoader(types),
         paths['lib_structs'], paths['usr_structs']
     )
 
@@ -141,12 +141,7 @@ def _do_output(to_write, binary):
         f.write(to_write)
 
 
-def dsa():
-    args = _load_args(
-        'dsd',
-        'Data Structure Assembler - assembly mode',
-        *_assembly_args, *_config_paths
-    )
+def _dsa(args):
     paths = _load_paths(args)
     data = _timed(_get_data, args['binary'])
     language = _load_language(paths)
@@ -155,15 +150,26 @@ def dsa():
         _reassemble, args['binary'], args['input'], language, False
     )
     print("Writing to output...")
-    _timed(_do_output, result, args['output'] or args['binary'])    
+    _timed(_do_output, result, args['output'] or args['binary'])
 
 
-def dsd():
-    args = _load_args(
+def dsa(binary, source, paths, output=None):
+    _dsa({
+        'binary': binary, 'input': source, 'paths': paths, 'output': output,
+        'lib_types': None, 'lib_structs': None,
+        'usr_types': None, 'usr_structs': None
+    })
+
+
+def dsa_cli():
+    _dsa(_load_args(
         'dsa',
-        'Data Structure Assembler - disassembly mode',
-        *_disassembly_args, *_config_paths
-    )
+        'Data Structure Assembler - assembly mode',
+        *_assembly_args, *_config_paths
+    ))
+
+
+def _dsd(args):
     paths = _load_paths(args)
     data = _timed(_get_data, args['binary'])
     language = _load_language(paths)
@@ -178,3 +184,20 @@ def dsd():
             _reassemble, args['binary'], args['output'], language, True
         )
         print(f"Verification: {'OK' if result == data else 'failed'}.")
+
+
+def dsd(binary, root, output, paths, verify):
+    _dsd({
+        'binary': binary, 'root': root, 'output': output, 'paths': paths,
+        'lib_types': None, 'lib_structs': None,
+        'usr_types': None, 'usr_structs': None,
+        'verify': verify
+    })
+
+
+def dsd_cli():
+    _dsd(_load_args(
+        'dsd',
+        'Data Structure Assembler - disassembly mode',
+        *_disassembly_args, *_config_paths
+    ))
