@@ -75,7 +75,12 @@ class Disassembler:
                 group_name == self.pending_groups[location], where=location
             )
         else:
-            self.pending_groups[location] = group_name
+            if not 0 <= location:
+                # This is a stopgap until referents are fixed properly.
+                print(f'Warning: skipping chunk at negative address')
+                return 'NULL'
+            else:
+                self.pending_groups[location] = group_name
         return self.get_label(location, label_base)
 
 

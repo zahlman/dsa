@@ -88,7 +88,11 @@ class Field:
             return result
         # If we have a valid pointer, inform the disassembler about it,
         # and get a label name from there.
-        return '@' + disassembler.add(self.referent, value, name)
+        # XXX hack 'NULL' into submission.
+        HAX = disassembler.add(self.referent, value, name)
+        if HAX != 'NULL':
+            HAX = '@' + HAX
+        return HAX
 
 
     def parse(self, text):
