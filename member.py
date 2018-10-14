@@ -55,14 +55,22 @@ class Option:
             return None # try the next Option.
         # Collect results for each field.
         # TODO: think about how to support other endianness.
-        return [
-            field.format(
-                (full_value >> offset) & ((1 << field.size) - 1),
-                disassembler, f'{member_name}'
-            )
+        items = [
+            (full_value >> offset) & ((1 << field.size) - 1)
             for offset, field in zip(
                 self.offsets, self.fields
             )
+        ]
+        return errors.wrap(
+            f'(field values: {items})',
+            self._format, items, disassembler, member_name
+        )
+
+
+    def _format(self, items, disassembler, member_name):
+        return [
+            field.format(item, disassembler, f'{member_name}')
+            for item, field in zip(items, self.fields)
         ]
 
 
@@ -109,7 +117,7 @@ class Member:
 
     def format(self, value, disassembler, name):
         return errors.wrap(
-            f'Member {name} (of type {self.typename})',
+            f'Member {name} (of type {self.typename}) (data: {value})',
             self._format, value, disassembler, name
         )
 

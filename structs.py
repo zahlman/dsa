@@ -24,7 +24,7 @@ class MISSING_TERMINATOR_COUNTED(errors.UserError):
 
 
 class NO_MATCH(errors.SequenceError):
-    """invalid source data"""
+    """invalid source data at 0x{position:X}"""
 
 
 class CHUNK_TOO_BIG(errors.UserError):
@@ -189,7 +189,7 @@ class StructGroup:
     def _try_candidate(self, name, source, position, disassembler):
         assert name in self.structs
         result = errors.wrap(
-            f'Struct {name}',
+            f'Struct {name} (at 0x{position:X})',
             self.structs[name].format_from, source, position, disassembler
         )
         if result is not None:
@@ -201,10 +201,10 @@ class StructGroup:
         candidates = self._candidates(source, position, previous, count)
         if not candidates:
             return None
-        return NO_MATCH.first_not_none(
+        return NO_MATCH.first_not_none((
             self._try_candidate(name, source, position, disassembler)
             for name in candidates
-        )
+        ), position=position)
 
 
     def parse(self, tokens, count, previous):

@@ -45,13 +45,16 @@ class Disassembler:
         self.sizes[location] = size
 
 
-    def _make_chunk(self, source, location, group):
+    def _make_chunk(self, source, location, group, group_name):
         position = location
         previous = None
         lines = []
         group.check_alignment(position)
         for i in count():
-            result = group.format_from(source, position, previous, i, self)
+            result = errors.wrap(
+                f'Structgroup {group_name} (chunk starting at 0x{location:X})',
+                group.format_from, source, position, previous, i, self
+            )
             if result is None:
                 position += group.terminator_size
                 break
@@ -85,7 +88,7 @@ class Disassembler:
         except KeyError: # skip chunk for unknown group
             print(f'Warning: skipping chunk of unknown type {group_name}')
         else:
-            chunk, size = self._make_chunk(source, location, group)
+            chunk, size = self._make_chunk(source, location, group, group_name)
             self._store_result(location, group_name, chunk, size)
 
 
