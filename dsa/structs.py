@@ -89,7 +89,7 @@ class Struct:
             # This struct wasn't matched, but maybe another one will be.
             return None
         return tuple(
-            member.format(value, disassembler, name)
+            member.format(name, value, disassembler)
             for member, name, value in zip(
                 self.members, self.names, match.groups()
             )
@@ -102,7 +102,7 @@ class Struct:
         for member, name, token, offset in zip(
             self.members, self.names, tokens, self.offsets
         ):
-            raw = member.parse(token, name)
+            raw = member.parse(name, token)
             assert len(raw) == member.size
             self.template[offset:offset+len(raw)] = raw
         return bytes(self.template)

@@ -100,7 +100,7 @@ class StructData:
             fixed = None # normalize for later use
         else:
             FIXED_AND_NAMED.require(name == '')
-            fixed = member.parse(fixed, name)
+            fixed = member.parse(name, fixed)
         self.member_data.append((member, name, fixed))
 
 
