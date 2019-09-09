@@ -51,8 +51,7 @@ def load_files(machine, *filenames):
     return accumulator
 
 
-# Interface for testing.
 def load_lines(machine, lines):
     accumulator = {}
-    feed("String data", None, accumulator, machine, lines)
+    feed("String data", None, accumulator, machine, process(lines))
     return accumulator
