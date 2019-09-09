@@ -1,5 +1,6 @@
 from . import errors
 from .line_parsing import format_line, wrap_multiword
+from .ui.diagnostic import trace
 from itertools import count
 
 
@@ -67,7 +68,7 @@ class Disassembler:
         else:
             if not 0 <= location:
                 # This is a stopgap until referents are fixed properly.
-                print(f'Warning: skipping chunk at negative address')
+                trace(f'Warning: skipping chunk at negative address')
                 return 'NULL'
             else:
                 self.pending_groups[location] = group_name
@@ -81,7 +82,7 @@ class Disassembler:
         try:
             group = self.all_groups[group_name]
         except KeyError: # skip chunk for unknown group
-            print(f'Warning: skipping chunk of unknown type {group_name}')
+            trace(f'Warning: skipping chunk of unknown type {group_name}')
         else:
             chunk, size = self._make_chunk(source, location, group, group_name)
             self._store_result(location, group_name, chunk, size)

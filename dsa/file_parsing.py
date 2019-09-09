@@ -1,5 +1,6 @@
 from . import errors
 from .line_parsing import tokenize
+from .ui.diagnostic import trace
 from functools import lru_cache, partial
 import glob, os
 
@@ -28,7 +29,7 @@ def process(lines):
 
 
 def feed(source_name, label, accumulator, machine, lines):
-    print("Loading:", source_name)
+    trace(f'Loading: {source_name}')
     for position, indent, line_tokens in lines:
         errors.wrap(
             f'{source_name}: Line {position}',
