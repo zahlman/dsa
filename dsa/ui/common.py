@@ -4,16 +4,8 @@ from ..file_parsing import load_files
 from ..path_loader import PathLoader
 from ..structgroup_loader import StructGroupLoader
 from ..type_loader import TypeLoader
+from .diagnostic import timed, trace
 import argparse, os
-from time import time
-
-
-def _timed(action, *args):
-    t = time()
-    result = action(*args)
-    elapsed = int((time() - t) * 1000)
-    print(f'({elapsed} ms)')
-    return result
 
 
 def load_args(prog, description, *argspecs):
@@ -66,47 +58,63 @@ def _folder(filename):
 _DSA_ROOT = _folder(_folder(__file__))
 
 
+@timed('Loading definition paths...')
+def _load_paths(pathfile):
+    return load_files(PathLoader(_DSA_ROOT, _folder(pathfile)), pathfile)
+
+
+@timed('Loading types...')
+def _load_types(paths):
+    return load_files(TypeLoader(), *paths['types'])
+
+
+@timed('Loading structgroups...')
+def _load_structgroups(types, paths):
+    return load_files(StructGroupLoader(types), *paths['structgroups'])
+
+
+@timed('Loading language...')
 def _load_language(pathfile):
-    paths = _timed(
-        load_files, PathLoader(_DSA_ROOT, _folder(pathfile)), pathfile
-    )
-    print('Loading types...')
-    types = _timed(load_files, TypeLoader(), *paths['types'])
-    print('Loading language...')
-    return _timed(load_files, StructGroupLoader(types), *paths['structgroups'])
+    paths = _load_paths(pathfile)
+    return _load_structgroups(_load_types(paths), paths)
 
 
+@timed('Loading binary...')
 def _get_data(source):
-    print('Loading binary...')
     with open(source, 'rb') as f:
         return f.read()
 
 
-def _reassemble(infilename, outfilename, language, verbose):
+# two different diagnostic messages for this,
+# so the decoration is invoked dynamically.
+def _assemble(infilename, outfilename, language, verbose):
     chunks = load_files(SourceLoader(language), outfilename)
     with open(infilename, 'rb') as f:
         data = bytearray(f.read())
     for position, chunk in chunks.items():
         if verbose:
-            print(f'Test writing {len(chunk)} bytes at 0x{position:X}')
+            trace(f'Test writing {len(chunk)} bytes at 0x{position:X}')
         data[position:position+len(chunk)] = chunk
     return bytes(data)
 
 
+@timed('Disassembling...')
+def _disassemble(language, group_name, position, data, output):
+    Disassembler(language, group_name, position, 'main')(data, output)
+
+
+@timed('Writing to output...')
 def _do_output(to_write, binary):
     with open(binary, 'wb') as f:
         f.write(to_write)
 
 
 def dsa(binary, source, pathfile, output=None):
-    data = _timed(_get_data, binary)
+    data = _get_data(binary)
     language = _load_language(pathfile)
-    print("Assembling...")
-    result = _timed(
-        _reassemble, binary, source, language, False
-    )
-    print("Writing to output...")
-    _timed(_do_output, result, binary if output is None else output)
+    action = timed('Assembling...')(_assemble)
+    result = action(binary, source, language, False)
+    _do_output(result, binary if output is None else output)
 
 
 def dsa_cli():
@@ -118,19 +126,15 @@ def dsa_cli():
 
 
 def dsd(binary, root, output, pathfile, verify):
-    data = _timed(_get_data, binary)
+    data = _get_data(binary)
     language = _load_language(pathfile)
     group_name, position = _parse_entry_point(root)
-    print('Setting up...')
-    d = _timed(Disassembler, language, group_name, position, 'main')
-    print('Disassembling...')
-    _timed(d, data, output)
+    _disassemble(language, group_name, position, data, output)
     if verify:
-        print('Reassembling for verification...')
-        result = _timed(
-            _reassemble, binary, output, language, True
-        )
-        print('Verification:', 'OK.' if result == data else 'failed.')
+        action = timed('Reassembling for verification...')(_assemble)
+        result = action(binary, output, language, True)
+        status = 'OK' if result == data else 'failed'
+        trace(f'Verification: {status}.')
 
 
 def dsd_cli():
