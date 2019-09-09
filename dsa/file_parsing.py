@@ -27,17 +27,6 @@ def process(lines):
     yield position, indent, tokenize(line)
 
 
-def glob_files(patterns, base):
-    for pattern in patterns:
-        for filename in glob.glob(os.path.join(base, pattern), recursive=True):
-            yield os.path.abspath(filename)
-
-
-def resolve_filenames(lib_globs, usr_globs):
-    yield from glob_files(lib_globs, os.path.split(__file__)[0])
-    yield from glob_files(usr_globs, os.getcwd())
-
-
 def feed(source_name, label, accumulator, machine, lines):
     print("Loading:", source_name)
     for position, indent, line_tokens in lines:
