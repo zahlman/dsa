@@ -5,14 +5,27 @@ import re, textwrap
 
 
 class TokenError(errors.UserError):
-    # Represents an error in the number of tokens on a line or the number of
-    # parts of a token.
+    """Represents an error in the number of tokens on a line or the number of
+    parts of a token."""
+
+
     @classmethod
     def pad(cls, token, required, total, **kwargs):
+        """Helper for verifying and sanitizing the number of components."""
         actual = len(token)
         if required <= actual <= total:
             return token + ([None] * (total - actual))
         raise cls(actual=actual, **kwargs)
+
+
+    @classmethod
+    def singleton(cls, token, **kwargs):
+        """Helper to verify there is a single component."""
+        if token is None:
+            return None # handle placeholders from pad()
+        if len(token) != 1:
+            raise cls(**kwargs)
+        return token[0]
 
 
 class LineError(errors.UserError):
