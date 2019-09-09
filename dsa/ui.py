@@ -1,16 +1,11 @@
 from .assembly import SourceLoader
 from .disassembly import Disassembler
-from . import errors
 from .file_parsing import load_files
 from .path_loader import PathLoader
 from .structgroup_loader import StructGroupLoader
 from .type_loader import TypeLoader
 import argparse, os
 from time import time
-
-
-class UNRECOGNIZED_PATH_TYPE(errors.MappingError):
-    """unrecognized path type `{key}`"""
 
 
 def _timed(action, *args):
@@ -32,17 +27,6 @@ def _parse_entry_point(raw):
     name, colon, offset = raw.partition(':')
     offset = int(offset, 0)
     return name, offset
-
-
-def _populate_paths(paths, filename):
-    with open(filename) as f:
-        for line in f:
-            line, mark, comment = line.partition('#')
-            line = line.strip()
-            if not line:
-                continue
-            category, path = line.split(None, 1)
-            UNRECOGNIZED_PATH_TYPE.get(paths, category).append(path)
 
 
 _disassembly_args = [
