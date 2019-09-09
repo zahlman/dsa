@@ -54,16 +54,10 @@ def feed_file(machine, accumulator, filename):
         feed(f"File '{filename}'", label, accumulator, machine, process(f))
 
 
-def load_globs(machine, lib_globs, usr_globs):
+def load_files(machine, *filenames):
     accumulator = {}
-    for filename in resolve_filenames(lib_globs, usr_globs):
+    for filename in filenames:
         feed_file(machine, accumulator, filename)
-    return accumulator
-
-
-def load_file(machine, filename):
-    accumulator = {}
-    feed_file(machine, accumulator, filename)
     return accumulator
 
 

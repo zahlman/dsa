@@ -1,10 +1,11 @@
 from .assembly import SourceLoader
 from .disassembly import Disassembler
 from . import errors
-from .file_parsing import load_file, load_globs
+from .file_parsing import load_files
+from .path_loader import PathLoader
 from .structgroup_loader import StructGroupLoader
 from .type_loader import TypeLoader
-import argparse
+import argparse, os
 from time import time
 
 
@@ -44,17 +45,6 @@ def _populate_paths(paths, filename):
             UNRECOGNIZED_PATH_TYPE.get(paths, category).append(path)
 
 
-def _load_paths(options):
-    paths = {
-        k: [] if options[k] is None else options[k]
-        for k in ('lib_types', 'usr_types', 'lib_structs', 'usr_structs')
-    }
-    filename = options['paths']
-    if filename is not None:
-        _populate_paths(paths, filename)
-    return paths
-
-
 _disassembly_args = [
     ['binary', 'source binary file to disassemble from', {}],
     ['output', 'output file name', {}],
@@ -66,7 +56,7 @@ _disassembly_args = [
     [
         '-v', '--verify',
         'try re-assembling the output and comparing to the source',
-        {'nargs': '?', 'const': True, 'default': False}
+        {'const': True, 'default': False}
     ]
 ]
 
@@ -75,48 +65,29 @@ _assembly_args = [
     ['binary', 'source binary file to assemble into', {}],
     ['input', 'name of file to assemble', {}],
     [
-        '-o', '--output', 'binary file to write (if not overwriting source)',
-        {'nargs': '?'}
+        '-o', '--output', 'binary file to write (if not overwriting source)', {}
     ]
 ]
 
 
 _config_paths = [
     ['-p', '--paths', 'name of input file containing path config info', {}],
-    [
-        '-s', '--lib_structs',
-        'path to structgroup definitions (relative to DSA)',
-        {'nargs': '*'}
-    ],
-    [
-        '-S', '--usr_structs',
-        'path to structgroup definitions (relative to working directory)',
-        {'nargs': '*'}
-    ],
-    [
-        '-t', '--lib_types',
-        'path to type definitions (relative to DSA)',
-        {'nargs': '*'}
-    ],
-    [
-        '-T', '--usr_types',
-        'path to type definitions (relative to working directory)',
-        {'nargs': '*'}
-    ]
 ]
 
 
-def _load_language(paths):
+def _folder(filename):
+    return os.path.split(os.path.realpath(filename))[0]
+
+
+def _load_language(pathfile):
+    print('Loading paths...')
+    paths = _timed(
+        load_files, PathLoader(_folder(__file__), _folder(pathfile)), pathfile
+    )
     print('Loading types...')
-    types = _timed(
-        load_globs, TypeLoader(),
-        paths['lib_types'], paths['usr_types']
-    )
+    types = _timed(load_files, TypeLoader(), *paths['types'])
     print('Loading language...')
-    return _timed(
-        load_globs, StructGroupLoader(types),
-        paths['lib_structs'], paths['usr_structs']
-    )
+    return _timed(load_files, StructGroupLoader(types), *paths['structgroups'])
 
 
 def _get_data(source):
@@ -126,7 +97,7 @@ def _get_data(source):
 
 
 def _reassemble(infilename, outfilename, language, verbose):
-    chunks = load_file(SourceLoader(language), outfilename)
+    chunks = load_files(SourceLoader(language), outfilename)
     with open(infilename, 'rb') as f:
         data = bytearray(f.read())
     for position, chunk in chunks.items():
@@ -141,58 +112,39 @@ def _do_output(to_write, binary):
         f.write(to_write)
 
 
-def _dsa(args):
-    paths = _load_paths(args)
-    data = _timed(_get_data, args['binary'])
-    language = _load_language(paths)
+def dsa(binary, source, pathfile, output=None):
+    data = _timed(_get_data, binary)
+    language = _load_language(pathfile)
     print("Assembling...")
     result = _timed(
-        _reassemble, args['binary'], args['input'], language, False
+        _reassemble, binary, source, language, False
     )
     print("Writing to output...")
-    _timed(_do_output, result, args['output'] or args['binary'])
-
-
-def dsa(binary, source, paths, output=None):
-    _dsa({
-        'binary': binary, 'input': source, 'paths': paths, 'output': output,
-        'lib_types': None, 'lib_structs': None,
-        'usr_types': None, 'usr_structs': None
-    })
+    _timed(_do_output, result, binary if output is None else output)
 
 
 def dsa_cli():
-    _dsa(load_args(
+    dsa(**load_args(
         'dsa',
         'Data Structure Assembler - assembly mode',
         *_assembly_args, *_config_paths
     ))
 
 
-def _dsd(args):
-    paths = _load_paths(args)
-    data = _timed(_get_data, args['binary'])
-    language = _load_language(paths)
-    group_name, position = _parse_entry_point(args['root'])
+def dsd(binary, root, output, pathfile, verify):
+    data = _timed(_get_data, binary)
+    language = _load_language(pathfile)
+    group_name, position = _parse_entry_point(root)
     print('Setting up...')
     d = _timed(Disassembler, language, group_name, position, 'main')
     print('Disassembling...')
-    _timed(d, data, args['output'])
-    if args['verify']:
+    _timed(d, data, output)
+    if verify:
         print('Reassembling for verification...')
         result = _timed(
-            _reassemble, args['binary'], args['output'], language, True
+            _reassemble, binary, output, language, True
         )
-        print(f"Verification: {'OK' if result == data else 'failed'}.")
-
-
-def dsd(binary, root, output, paths, verify):
-    _dsd({
-        'binary': binary, 'root': root, 'output': output, 'paths': paths,
-        'lib_types': None, 'lib_structs': None,
-        'usr_types': None, 'usr_structs': None,
-        'verify': verify
-    })
+        print('Verification:', 'OK.' if result == data else 'failed.')
 
 
 def dsd_cli():
