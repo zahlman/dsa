@@ -60,13 +60,15 @@ _config_paths = [
 
 
 def _folder(filename):
-    return os.path.split(os.path.realpath(filename))[0]
+    return os.path.realpath(os.path.join(filename, '..'))
+
+
+_DSA_ROOT = _folder(_folder(__file__))
 
 
 def _load_language(pathfile):
-    print('Loading paths...')
     paths = _timed(
-        load_files, PathLoader(_folder(__file__), _folder(pathfile)), pathfile
+        load_files, PathLoader(_DSA_ROOT, _folder(pathfile)), pathfile
     )
     print('Loading types...')
     types = _timed(load_files, TypeLoader(), *paths['types'])
