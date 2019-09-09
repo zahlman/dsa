@@ -1,54 +1,58 @@
 from ..assembly import SourceLoader
 from ..disassembly import Disassembler
-from ..file_parsing import load_files
+from ..file_parsing import load_files, load_lines
 from ..path_loader import PathLoader
 from ..structgroup_loader import StructGroupLoader
 from ..type_loader import TypeLoader
 from .diagnostic import timed, trace
-import argparse, os
+import argparse, functools, os
 
 
-def load_args(prog, description, *argspecs):
-    parser = argparse.ArgumentParser(prog=prog, description=description)
-    for *names, helptext, kwargs in argspecs:
-        parser.add_argument(*names, help=helptext, **kwargs)
-    return vars(parser.parse_args())
+def _invoke(func):
+    # Use command-line arguments to call a function that was decorated
+    # with `entry_point`, and possibly one or more `params`.
+    func(**vars(func._parser.parse_args()))
 
 
-def _parse_entry_point(raw):
+def _setup(description, func):
+    # implementation for `entry_point`.
+    func._parser = argparse.ArgumentParser(
+        prog=func.__name__, description=description
+    )
+    func.invoke = functools.partial(_invoke, func)
+    return func
+
+
+def _add_param(args, kwargs, func):
+    *args, helptext = args
+    func._parser.add_argument(*args, help=helptext, **kwargs)
+    return func
+
+
+def entry_point(description):
+    """Set up a function for use as a CLI entry point by calling .invoke().
+    This decorator must come after `param` decorators, but before anything
+    that replaces the underlying function.
+    The function will be called by parsing the command-line arguments into a
+    Namespace, converting to a dict and splatting it out as kwargs."""
+    return functools.partial(_setup, description)
+
+
+def param(*args, **kwargs):
+    """Add an argument to the parser for an entry_point function.
+    The parameters are the same as for `argparse.ArgumentParser.add_argument`,
+    except that the last positional argument is turned into a `help` keyword
+    argument.
+    Decorators that add positional arguments should appear in the reverse
+    order of how they will be input on the command line.
+    """
+    return functools.partial(_add_param, args, kwargs)
+
+
+def _parse_disassembly_root(raw):
     name, colon, offset = raw.partition(':')
     offset = int(offset, 0)
     return name, offset
-
-
-_disassembly_args = [
-    ['binary', 'source binary file to disassemble from', {}],
-    ['output', 'output file name', {}],
-    [
-        'root',
-        'structgroup name and offset for root chunk, e.g. `example:0x123`',
-        {}
-    ],
-    [
-        '-v', '--verify',
-        'try re-assembling the output and comparing to the source',
-        {'const': True, 'default': False}
-    ]
-]
-
-
-_assembly_args = [
-    ['binary', 'source binary file to assemble into', {}],
-    ['input', 'name of file to assemble', {}],
-    [
-        '-o', '--output', 'binary file to write (if not overwriting source)', {}
-    ]
-]
-
-
-_config_paths = [
-    ['-p', '--paths', 'name of input file containing path config info', {}],
-]
 
 
 def _folder(filename):
@@ -58,8 +62,18 @@ def _folder(filename):
 _DSA_ROOT = _folder(_folder(__file__))
 
 
+_DEFAULT_PATHS = [
+    # Default to including all system modules and nothing user-defined.
+    'types types',
+    '    **',
+    'structgroups structgroups',
+    '    **'
+]
+
 @timed('Loading definition paths...')
 def _load_paths(pathfile):
+    if pathfile is None:
+        return load_lines(PathLoader(_DSA_ROOT, _DSA_ROOT), _DEFAULT_PATHS)
     return load_files(PathLoader(_DSA_ROOT, _folder(pathfile)), pathfile)
 
 
@@ -109,37 +123,32 @@ def _do_output(to_write, binary):
         f.write(to_write)
 
 
-def dsa(binary, source, pathfile, output=None):
+@param('source', 'name of file to assemble')
+@param('binary', 'source binary file to assemble into')
+@param('-o', '--output', 'binary file to write (if not overwriting source)')
+@param('-p', '--paths', 'name of input file containing path config info')
+@entry_point('Data Structure Assembler - assembly mode')
+def dsa(binary, source, paths, output=None):
     data = _get_data(binary)
-    language = _load_language(pathfile)
+    language = _load_language(paths)
     action = timed('Assembling...')(_assemble)
     result = action(binary, source, language, False)
     _do_output(result, binary if output is None else output)
 
 
-def dsa_cli():
-    dsa(**load_args(
-        'dsa',
-        'Data Structure Assembler - assembly mode',
-        *_assembly_args, *_config_paths
-    ))
-
-
-def dsd(binary, root, output, pathfile, verify):
+@param('output', 'output file name')
+@param('root', 'structgroup name and offset for root chunk, e.g. `example:0x123`')
+@param('binary', 'source binary file to disassemble from')
+@param('-v', '--verify', 'try re-assembling the output and comparing to the source', nargs='?', const=True, default=False)
+@param('-p', '--paths', 'name of input file containing path config info')
+@entry_point('Data Structure Assembler - disassembly mode')
+def dsd(binary, root, output, paths, verify):
     data = _get_data(binary)
-    language = _load_language(pathfile)
-    group_name, position = _parse_entry_point(root)
+    language = _load_language(paths)
+    group_name, position = _parse_disassembly_root(root)
     _disassemble(language, group_name, position, data, output)
     if verify:
         action = timed('Reassembling for verification...')(_assemble)
         result = action(binary, output, language, True)
         status = 'OK' if result == data else 'failed'
         trace(f'Verification: {status}.')
-
-
-def dsd_cli():
-    dsd(**load_args(
-        'dsd',
-        'Data Structure Assembler - disassembly mode',
-        *_disassembly_args, *_config_paths
-    ))

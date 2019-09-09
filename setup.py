@@ -17,7 +17,7 @@ setuptools.setup(
     author='Karl Knechtel',
     author_email='karl.a.knechtel@gmail.com',
     description='Data Structure Assembler',
-    packages=['dsa', 'dsa.util'],
+    packages=['dsa', 'dsa.ui'],
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Environment :: Console',
@@ -30,8 +30,8 @@ setuptools.setup(
     package_data={'dsa': ('structgroups/*.txt', 'types/*.txt')},
     entry_points={
         'console_scripts': [
-            'dsa=dsa.ui:dsa_cli',
-            'dsd=dsa.ui:dsd_cli'
+            'dsa=dsa.ui.common:dsa.invoke',
+            'dsd=dsa.ui.common:dsd.invoke'
         ]
     }
 )
