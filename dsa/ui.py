@@ -132,7 +132,7 @@ def dsd(binary, root, output, pathfile, verify):
 
 
 def dsd_cli():
-    _dsd(load_args(
+    dsd(**load_args(
         'dsd',
         'Data Structure Assembler - disassembly mode',
         *_disassembly_args, *_config_paths
