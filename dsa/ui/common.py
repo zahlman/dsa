@@ -1,9 +1,9 @@
-from .assembly import SourceLoader
-from .disassembly import Disassembler
-from .file_parsing import load_files
-from .path_loader import PathLoader
-from .structgroup_loader import StructGroupLoader
-from .type_loader import TypeLoader
+from ..assembly import SourceLoader
+from ..disassembly import Disassembler
+from ..file_parsing import load_files
+from ..path_loader import PathLoader
+from ..structgroup_loader import StructGroupLoader
+from ..type_loader import TypeLoader
 import argparse, os
 from time import time
 
