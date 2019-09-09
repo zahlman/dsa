@@ -139,10 +139,10 @@ def dsa(binary, source, paths, output=None):
 @param('output', 'output file name')
 @param('root', 'structgroup name and offset for root chunk, e.g. `example:0x123`')
 @param('binary', 'source binary file to disassemble from')
-@param('-v', '--verify', 'try re-assembling the output and comparing to the source', nargs='?', const=True, default=False)
+@param('-v', '--verify', 'try re-assembling the output and comparing to the source', action='store_true')
 @param('-p', '--paths', 'name of input file containing path config info')
 @entry_point('Data Structure Assembler - disassembly mode')
-def dsd(binary, root, output, paths, verify):
+def dsd(binary, root, output, paths, verify=False):
     data = _get_data(binary)
     language = _load_language(paths)
     group_name, position = _parse_disassembly_root(root)
