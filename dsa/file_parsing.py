@@ -1,6 +1,6 @@
 from . import errors
 from .line_parsing import tokenize
-from .ui.diagnostic import trace
+from .ui.tracing import trace
 from functools import lru_cache, partial
 import glob, os
 

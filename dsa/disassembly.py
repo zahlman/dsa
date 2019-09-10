@@ -1,6 +1,6 @@
 from . import errors
 from .line_parsing import format_line, wrap_multiword
-from .ui.diagnostic import trace
+from .ui.tracing import trace
 from itertools import count
 
 

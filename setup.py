@@ -30,8 +30,9 @@ setuptools.setup(
     package_data={'dsa': ('structgroups/*.txt', 'types/*.txt')},
     entry_points={
         'console_scripts': [
-            'dsa=dsa.ui.common:dsa.invoke',
-            'dsd=dsa.ui.common:dsd.invoke'
+            'dsa=dsa.ui.dsa:dsa.invoke',
+            'dsd=dsa.ui.dsd:dsd.invoke',
+            'whereisdsa=dsa.ui.location:display.invoke'
         ]
     }
 )

@@ -2,7 +2,7 @@ from functools import wraps
 from time import time
 
 
-"""A simple logging setup that tracks time elapsed and indents for subtasks."""
+"""A simple logging system with timing and indentation."""
 
 
 def trace(message):
