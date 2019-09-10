@@ -1,10 +1,10 @@
-from . import errors
+from ..errors import parse_int, MappingError, UserError
 import binascii
 from functools import partial
 import re, textwrap
 
 
-class TokenError(errors.UserError):
+class TokenError(UserError):
     """Represents an error in the number of tokens on a line or the number of
     parts of a token."""
 
@@ -28,7 +28,7 @@ class TokenError(errors.UserError):
         return token[0]
 
 
-class LineError(errors.UserError):
+class LineError(UserError):
     def __init__(self, **kwargs):
         space = ' ' * kwargs['position']
         super().__init__(space=space, **kwargs)
@@ -48,39 +48,39 @@ class EMPTY_TOKEN(LineError):
     (N.B. use `0` for empty sets of flags)"""
 
 
-class DUPLICATE_PARAMETER(errors.MappingError):
+class DUPLICATE_PARAMETER(MappingError):
     """duplicate specification of parameter `{key}`"""
 
 
-class UNRECOGNIZED_PARAMETER(errors.MappingError):
+class UNRECOGNIZED_PARAMETER(MappingError):
     """unrecognized parameter `{key}`"""
 
 
-class MISSING_PARAMETERS(errors.UserError):
+class MISSING_PARAMETERS(UserError):
     """missing required parameters `{missing}`"""
 
 
-class MUST_BE_SINGLE_ITEM(errors.UserError):
+class MUST_BE_SINGLE_ITEM(UserError):
     """flag value must be a single item"""
 
 
-class ILLEGAL_VALUE(errors.UserError):
+class ILLEGAL_VALUE(UserError):
     """value must be one of {whitelist}"""
 
 
-class MUST_BE_POSITIVE(errors.UserError):
+class MUST_BE_POSITIVE(UserError):
     """value cannot be negative or zero"""
 
 
-class INVALID_BOOLEAN(errors.MappingError):
+class INVALID_BOOLEAN(MappingError):
     """invalid boolean `{key}` (must be `true` or `false`, case-insensitive)"""
 
 
-class INVALID_BASE(errors.MappingError):
+class INVALID_BASE(MappingError):
     """invalid base setting `{key}` (allowed values: 2, 8, 10, 16)"""
 
 
-class INVALID_TERMINATOR(errors.UserError):
+class INVALID_TERMINATOR(UserError):
     """invalid terminator format"""
 
 
@@ -183,7 +183,7 @@ def string(items):
 
 
 def integer(items):
-    return errors.parse_int(string(items))
+    return parse_int(string(items))
 
 
 def _whitelisted_string(whitelist, items):

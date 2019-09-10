@@ -1,6 +1,7 @@
-import glob, os
-from .errors import UserError
+from ..errors import UserError
 from .line_parsing import TokenError
+from glob import glob
+import os.path
 
 
 class UNKNOWN_ROOT(TokenError):
@@ -79,7 +80,7 @@ class PathLoader:
         else:
             last = [f'{last}.txt']
         pattern = os.path.join(self._root, *parts, *last)
-        for path in glob.glob(pattern, recursive=True):
+        for path in glob(pattern, recursive=True):
             self._paths[self._kind].add(os.path.realpath(path))
 
 

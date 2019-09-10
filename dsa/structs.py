@@ -1,5 +1,5 @@
 from . import errors
-from .line_parsing import TokenError
+from .parsing.line_parsing import TokenError
 import re
 
 

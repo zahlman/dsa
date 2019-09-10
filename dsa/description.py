@@ -1,38 +1,38 @@
-from . import errors
-from . import line_parsing
+from .errors import parse_int, parse_optional_int, SequenceError, UserError
+from .parsing.line_parsing import token_splitter, TokenError
 from functools import partial
 import re
 
 
-class MISSING_PARAMETER(errors.UserError):
+class MISSING_PARAMETER(UserError):
     """missing required parameter for labelled range"""
 
 
-class FORBIDDEN_PARAMETER(errors.UserError):
+class FORBIDDEN_PARAMETER(UserError):
     """labelled constant does not take a parameter"""
 
 
-class PARAMETER_OUT_OF_RANGE(errors.UserError):
+class PARAMETER_OUT_OF_RANGE(UserError):
     """labelled range parameter is out of range"""
 
 
-class FORMAT_FAILED(errors.SequenceError):
+class FORMAT_FAILED(SequenceError):
     """no valid format for value: `{value}`"""
 
 
-class PARSE_FAILED(errors.SequenceError):
+class PARSE_FAILED(SequenceError):
     """couldn't parse: `{text}`"""
 
 
-class DUPLICATE_FLAG(errors.UserError):
+class DUPLICATE_FLAG(UserError):
     """duplicate flag names not allowed"""
 
 
-class INVALID_RANGE(line_parsing.TokenError):
+class INVALID_RANGE(TokenError):
     """invalid range (token should have 1..2 parts, has {actual})"""
 
 
-class SINGLE_TOKEN_REQUIRED(errors.UserError):
+class SINGLE_TOKEN_REQUIRED(UserError):
     """{thing} must be a single, single-part token
     (use `[]` to group multiple words; `,` and `:` are not allowed)"""
 
@@ -91,7 +91,7 @@ class LabelledRange:
             return 0
         else:
             MISSING_PARAMETER.require(param is not None)
-            return errors.parse_int(param, 'labelled range parameter')
+            return parse_int(param, 'labelled range parameter')
 
 
     def parse(self, text):
@@ -128,7 +128,7 @@ class EnumDescription:
         )
 
 
-_flag_splitter = line_parsing.token_splitter('|')
+_flag_splitter = token_splitter('|')
 
 
 class FlagsDescription:
@@ -181,8 +181,8 @@ def _parse_range(token):
     if high is None:
         high = low
     return (
-        errors.parse_optional_int(low, 'low end of range'),
-        errors.parse_optional_int(high, 'high end of range')
+        parse_optional_int(low, 'low end of range'),
+        parse_optional_int(high, 'high end of range')
     )
 
 

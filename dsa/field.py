@@ -1,10 +1,10 @@
 from .description import Raw
-from . import errors
-from .line_parsing import arguments, base, boolean, integer, string, TokenError
+from .errors import parse_int, MappingError, UserError
+from .parsing.line_parsing import arguments, base, boolean, integer, string, TokenError
 from functools import partial
 
 
-class UNALIGNED_POINTER(errors.UserError):
+class UNALIGNED_POINTER(UserError):
     """cannot refer to this address (wrong alignment)"""
 
 
@@ -12,11 +12,11 @@ class INVALID_BNF(TokenError):
     """invalid bits/name/fixed data (token should have 1..3 parts, has {actual})"""
 
 
-class MISSING_DESCRIPTION(errors.MappingError):
+class MISSING_DESCRIPTION(MappingError):
     """unrecognized description name `{key}`"""
 
 
-class FIXED_REFERENT(errors.UserError):
+class FIXED_REFERENT(UserError):
     """fixed field may not have a referent"""
 
 
@@ -105,7 +105,7 @@ class Field:
 def make_field(line_tokens, description_lookup):
     bnf, *flag_tokens = line_tokens
     bits, name, fixed = INVALID_BNF.pad(bnf, 1, 3)
-    bits = errors.parse_int(bits, 'bit count')
+    bits = parse_int(bits, 'bit count')
     args = arguments(
         flag_tokens,
         {

@@ -1,8 +1,7 @@
-from . import errors
+from ..ui.tracing import trace
+from ..errors import wrap as wrap_errors
 from .line_parsing import tokenize
-from .ui.tracing import trace
-from functools import lru_cache, partial
-import glob, os
+import os.path
 
 
 def process(lines):
@@ -31,7 +30,7 @@ def process(lines):
 def feed(source_name, label, accumulator, machine, lines):
     trace(f'Loading: {source_name}')
     for position, indent, line_tokens in lines:
-        errors.wrap(
+        wrap_errors(
             f'{source_name}: Line {position}',
             machine.add_line, indent, line_tokens
         )

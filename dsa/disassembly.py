@@ -1,10 +1,10 @@
-from . import errors
-from .line_parsing import format_line, wrap_multiword
+from .errors import wrap as wrap_errors, UserError
+from .parsing.line_parsing import format_line, wrap_multiword
 from .ui.tracing import trace
 from itertools import count
 
 
-class CHUNK_TYPE_CONFLICT(errors.UserError):
+class CHUNK_TYPE_CONFLICT(UserError):
     """conflicting requests for parsing data at 0x{where:X}"""
 
 
@@ -42,7 +42,7 @@ class Disassembler:
         lines = []
         group.check_alignment(position)
         for i in count():
-            result = errors.wrap(
+            result = wrap_errors(
                 f'Structgroup {group_name} (chunk starting at 0x{location:X})',
                 group.format_from, source, position, previous, i, self
             )

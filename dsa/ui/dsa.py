@@ -1,5 +1,5 @@
 from ..assembly import SourceLoader
-from ..file_parsing import load_files
+from ..parsing.file_parsing import load_files
 from .common import get_data, load_language
 from .entrypoint import entry_point, param
 from .tracing import timed, trace

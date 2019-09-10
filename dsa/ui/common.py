@@ -1,7 +1,7 @@
-from ..file_parsing import load_files, load_lines
-from ..path_loader import PathLoader
-from ..structgroup_loader import StructGroupLoader
-from ..type_loader import TypeLoader
+from ..parsing.file_parsing import load_files, load_lines
+from ..parsing.path_loader import PathLoader
+from ..parsing.structgroup_loader import StructGroupLoader
+from ..parsing.type_loader import TypeLoader
 from .tracing import timed
 from .location import folder, get as get_location
 

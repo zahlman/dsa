@@ -1,6 +1,6 @@
-from . import errors
+from ..errors import MappingError, UserError
+from ..structs import Struct, StructGroup
 from .line_parsing import arguments, boolean, hexdump, one_of, positive_integer, TokenError
-from .structs import Struct, StructGroup
 from collections import OrderedDict
 
 
@@ -8,43 +8,43 @@ class INVALID_STRUCT_NAME(TokenError):
     """struct name must be single-part (has {actual} parts)"""
 
 
-class NEXT_LAST_CONFLICT(errors.UserError):
+class NEXT_LAST_CONFLICT(UserError):
     """`next` and `last` options are mutually exclusive"""
 
 
-class INVALID_TNF(errors.UserError):
+class INVALID_TNF(UserError):
     """invalid typename/name/fixed data"""
 
 
-class UNRECOGNIZED_TYPE(errors.MappingError):
+class UNRECOGNIZED_TYPE(MappingError):
     """unrecognized type {key}"""
 
 
-class NOT_FIXED_OR_NAMED(errors.UserError):
+class NOT_FIXED_OR_NAMED(UserError):
     """member must have either a name or a fixed value"""
 
 
-class FIXED_AND_NAMED(errors.UserError):
+class FIXED_AND_NAMED(UserError):
     """member with fixed value may not be named"""
 
 
-class DUPLICATE_STRUCT(errors.MappingError):
+class DUPLICATE_STRUCT(MappingError):
     """duplicate struct definition for {key}"""
 
 
-class MEMBER_OUTSIDE_STRUCT(errors.UserError):
+class MEMBER_OUTSIDE_STRUCT(UserError):
     """member definition outside of struct"""
 
 
-class NO_OPTIONS(errors.UserError):
+class NO_OPTIONS(UserError):
     """empty struct group definition (no option line)"""
 
 
-class NO_STRUCTS(errors.UserError):
+class NO_STRUCTS(UserError):
     """empty struct group definition (no structs)"""
 
 
-class DUPLICATE_GROUP(errors.MappingError):
+class DUPLICATE_GROUP(MappingError):
     """duplicate definition for struct group `{key}`"""
 
 

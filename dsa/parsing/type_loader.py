@@ -1,7 +1,7 @@
-from .description import EnumDescriptionLoader, FlagsDescriptionLoader
-from .errors import MappingError, UserError
+from ..description import EnumDescriptionLoader, FlagsDescriptionLoader
+from ..errors import MappingError, UserError
+from ..member import MemberLoader
 from .line_parsing import TokenError
-from .member import MemberLoader
 
 
 class UNKNOWN_SECTION_TYPE(MappingError):

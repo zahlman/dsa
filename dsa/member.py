@@ -1,6 +1,6 @@
 from . import errors
 from .field import make_field
-from .line_parsing import TokenError
+from .parsing.line_parsing import TokenError
 from functools import partial
 
 

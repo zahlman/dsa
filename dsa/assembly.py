@@ -1,12 +1,12 @@
-from . import errors
-from .line_parsing import TokenError
+from .errors import parse_int, MappingError, UserError
+from .parsing.line_parsing import TokenError
 
 
-class UNRECOGNIZED_LABEL(errors.MappingError):
+class UNRECOGNIZED_LABEL(MappingError):
     """unrecognized label `@{key}`"""
 
 
-class UNRECOGNIZED_DIRECTIVE(errors.MappingError):
+class UNRECOGNIZED_DIRECTIVE(MappingError):
     """unrecognized directive `@{key}`"""
 
 
@@ -22,11 +22,11 @@ class INVALID_LABEL_POSITION(TokenError):
     """`@label` position must be a single-part token (has {actual} parts)"""
 
 
-class MISSING_BRACE(errors.UserError):
+class MISSING_BRACE(UserError):
     """missing open brace for `@{directive}` directive"""
 
 
-class UNRECOGNIZED_GROUP_NAME(errors.MappingError):
+class UNRECOGNIZED_GROUP_NAME(MappingError):
     """unrecognized group name `{key}`"""
 
 
@@ -34,7 +34,7 @@ class GROUPNAME_SINGLE(TokenError):
     """group name must be a single, single-part token"""
 
 
-class UNMATCHED_BRACE(errors.UserError):
+class UNMATCHED_BRACE(UserError):
     """unmatched closing brace"""
 
 
@@ -42,19 +42,19 @@ class BAD_LINE_START(TokenError):
     """directive or struct name must be single-part token (has {actual} parts)"""
 
 
-class DIRECTIVE_INSIDE_CHUNK(errors.UserError):
+class DIRECTIVE_INSIDE_CHUNK(UserError):
     """directives not allowed inside `@group` block"""
 
 
-class JUNK_AFTER_CLOSE_BRACE(errors.UserError):
+class JUNK_AFTER_CLOSE_BRACE(UserError):
     """closing brace must be on a line by itself"""
 
 
-class NON_DIRECTIVE_OUTSIDE_CHUNK(errors.UserError):
+class NON_DIRECTIVE_OUTSIDE_CHUNK(UserError):
     """non-directive lines must be inside `@group` blocks"""
 
 
-class DUPLICATE_CHUNK_LOCATION(errors.MappingError):
+class DUPLICATE_CHUNK_LOCATION(MappingError):
     """duplicate definition for chunk at 0x{key:X}"""
 
 
@@ -130,7 +130,7 @@ class SourceLoader:
         name, = INVALID_LABEL_NAME.pad(name, 1, 1)
         if position is not None:
             position, = INVALID_LABEL_POSITION.pad(position, 1, 1)
-            self.position = errors.parse_int(position)
+            self.position = parse_int(position)
         self.labels[name] = self.position
 
 
