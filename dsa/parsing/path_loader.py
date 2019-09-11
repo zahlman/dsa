@@ -1,11 +1,8 @@
 from ..errors import UserError
-from .line_parsing import TokenError
+from .line_parsing import one_of, TokenError
+from functools import partial
 from glob import glob
 import os.path
-
-
-class UNKNOWN_ROOT(TokenError):
-    """unindented line should start with `types` or `structgroups`"""
 
 
 class JUNK_ROOT(TokenError):
@@ -32,43 +29,34 @@ class FLOATING_MODULE(UserError):
     """module path outside of `types`/`structs` block"""
 
 
-class PathLoader:
+_PATH_TYPES = ('types', 'structgroups')
+
+
+class _PathLoader:
     def __init__(self, system_root, config_root):
-        self._system_root = system_root
-        self._config_root = config_root
-        self._reset()
-
-
-    def _reset(self):
-        self._paths = {'types': set(), 'structgroups': set()}
         self._root = None
         self._kind = None
-
-
-    def add_line(self, indent, line_tokens):
-        if indent:
-            self._add_path(line_tokens)
-        else:
-            self._setup(line_tokens)
+        self._system_root = system_root
+        self._config_root = config_root
 
 
     def _setup(self, line_tokens):
         kind, root = JUNK_ROOT.pad(line_tokens, 1, 2)
-        kind = JUNK_ROOT.singleton(kind)
+        kind = one_of(*_PATH_TYPES)(kind)
         root = JUNK_ROOT.singleton(root)
         if root is None:
             root = os.path.join(self._system_root, kind)
         else:
             root = os.path.join(self._config_root, root)
-        UNKNOWN_ROOT.require(kind in self._paths.keys())
-        self._kind = kind
         self._root = root
+        self._kind = kind
 
 
-    def _add_path(self, line_tokens):
+    def _add_path(self, accumulator, line_tokens):
         FLOATING_MODULE.require(self._kind is not None)
+        pathdict = accumulator[self._kind]
         *parts, last = [
-            INVALID_PATH_COMPONENT.pad(t, 1, 1)[0]
+            INVALID_PATH_COMPONENT.singleton(t)
             for t in line_tokens
         ]
         INNER_STAR.require('*' not in parts)
@@ -81,10 +69,16 @@ class PathLoader:
             last = [f'{last}.txt']
         pattern = os.path.join(self._root, *parts, *last)
         for path in glob(pattern, recursive=True):
-            self._paths[self._kind].add(os.path.realpath(path))
+            pathdict.add(os.path.realpath(path))
 
 
-    def end_file(self, label, accumulator):
-        for key, value in self._paths.items():
-            accumulator.setdefault(key, []).extend(value)
-        self._reset()
+    def __call__(self, accumulator, indent, line_tokens):
+        if indent:
+            self._add_path(accumulator, line_tokens)
+        else:
+            self._setup(line_tokens)
+
+
+def PathLoader(system_root, config_root):
+    accumulator = {k: set() for k in _PATH_TYPES}
+    return _PathLoader(system_root, config_root), accumulator

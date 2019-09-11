@@ -1,7 +1,11 @@
 from ..ui.tracing import trace
-from ..errors import wrap as wrap_errors
+from ..errors import wrap as wrap_errors, MappingError
 from .line_parsing import tokenize
 import os.path
+
+
+class DUPLICATE_FILE(MappingError):
+    """Filenames must be unique"""
 
 
 def process(lines):
@@ -19,6 +23,7 @@ def process(lines):
         # If we get here, we have a new "real" line.
         # As long as we weren't at the start of the file, yield the old line.
         if line:
+            # TODO: allow custom tokenization.
             yield position, indent, tokenize(line)
         else:
             assert position == 0
@@ -54,3 +59,40 @@ def load_lines(machine, lines):
     accumulator = {}
     feed("String data", None, accumulator, machine, process(lines))
     return accumulator
+
+
+# New interface.
+
+
+def feed_new(source_name, loader, accumulator, lines):
+    trace(f'Loading: {source_name}')
+    for position, indent, line_tokens in lines:
+        wrap_errors(
+            f'{source_name}: Line {position}',
+            loader, accumulator, indent, line_tokens
+        )
+
+
+def load_lines_new(lines, make_loader, *args, **kwargs):
+    loader, accumulator = make_loader(*args, **kwargs)
+    feed_new("String data", loader, accumulator, process(lines))
+    return accumulator
+
+
+def load_files_new(filenames, make_loader, *args, **kwargs):
+    loader, accumulator = make_loader(*args, **kwargs)
+    for filename in filenames:
+        with open(filename) as f:
+            feed_new(f"File '{filename}'", loader, accumulator, process(f))
+    return accumulator
+
+
+def load_files_tagged(filenames, make_loader, *args, **kwargs):
+    result = {}
+    for filename in filenames:
+        loader, accumulator = make_loader(*args, **kwargs)
+        label = os.path.splitext(os.path.basename(filename))[0]
+        with open(filename) as f:
+            feed_new(f"File '{filename}'", loader, accumulator, process(f))
+        DUPLICATE_FILE.add_unique(result, label, accumulator)
+    return result 
