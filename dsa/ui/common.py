@@ -27,14 +27,19 @@ _DEFAULT_PATHS = [
 @timed('Loading definition paths...')
 def _load_paths(pathfile):
     root = get_location()
-    if pathfile is None:
-        return load_lines_new(_DEFAULT_PATHS, PathLoader, root, root)
-    return load_files_new([pathfile], PathLoader, root, folder(pathfile))
+    setup = PathLoader.create_with_accumulator
+    return (
+        load_lines_new(_DEFAULT_PATHS, setup, root, root)
+        if pathfile is None
+        else load_files_new([pathfile], setup, root, folder(pathfile))
+    )
 
 
 @timed('Loading types...')
 def _load_types(paths):
-    return resolve_types(load_files_new(paths['types'], TypeLoader))
+    return resolve_types(
+        load_files_new(paths['types'], TypeLoader.create_with_accumulator)
+    )
 
 
 @timed('Loading structgroups...')

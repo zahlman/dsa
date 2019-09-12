@@ -1,6 +1,7 @@
 from ..ui.tracing import trace
 from ..errors import wrap as wrap_errors, MappingError
 from .line_parsing import tokenize
+from copy import deepcopy
 import os.path
 
 
@@ -62,6 +63,18 @@ def load_lines(machine, lines):
 
 
 # New interface.
+
+
+class SimpleLoader:
+    """A Loader implementation that checks for a single level of indentation
+    and creates its accumulator by cloning."""
+    @classmethod
+    def create_with_accumulator(cls, *args, **kwargs):
+        return cls(*args, **kwargs), deepcopy(cls.__accumulator__)
+
+
+    def __call__(self, accumulator, indent, tokens):
+        (self.indented if indent else self.unindented)(accumulator, tokens)
 
 
 def feed_new(source_name, loader, accumulator, lines):

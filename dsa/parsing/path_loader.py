@@ -1,4 +1,5 @@
 from ..errors import UserError
+from .file_parsing import SimpleLoader
 from .line_parsing import one_of, TokenError
 from functools import partial
 from glob import glob
@@ -32,7 +33,10 @@ class FLOATING_MODULE(UserError):
 _PATH_TYPES = ('types', 'structgroups')
 
 
-class _PathLoader:
+class PathLoader(SimpleLoader):
+    __accumulator__ = {k: set() for k in _PATH_TYPES}
+
+
     def __init__(self, system_root, config_root):
         self._root = None
         self._kind = None
@@ -40,8 +44,8 @@ class _PathLoader:
         self._config_root = config_root
 
 
-    def _setup(self, line_tokens):
-        kind, root = JUNK_ROOT.pad(line_tokens, 1, 2)
+    def unindented(self, accumulator, tokens):
+        kind, root = JUNK_ROOT.pad(tokens, 1, 2)
         kind = one_of(*_PATH_TYPES)(kind)
         root = JUNK_ROOT.singleton(root)
         if root is None:
@@ -52,12 +56,12 @@ class _PathLoader:
         self._kind = kind
 
 
-    def _add_path(self, accumulator, line_tokens):
+    def indented(self, accumulator, tokens):
         FLOATING_MODULE.require(self._kind is not None)
         pathdict = accumulator[self._kind]
         *parts, last = [
             INVALID_PATH_COMPONENT.singleton(t)
-            for t in line_tokens
+            for t in tokens
         ]
         INNER_STAR.require('*' not in parts)
         INNER_DOUBLE_STAR.require('**' not in parts)
@@ -70,15 +74,3 @@ class _PathLoader:
         pattern = os.path.join(self._root, *parts, *last)
         for path in glob(pattern, recursive=True):
             pathdict.add(os.path.realpath(path))
-
-
-    def __call__(self, accumulator, indent, line_tokens):
-        if indent:
-            self._add_path(accumulator, line_tokens)
-        else:
-            self._setup(line_tokens)
-
-
-def PathLoader(system_root, config_root):
-    accumulator = {k: set() for k in _PATH_TYPES}
-    return _PathLoader(system_root, config_root), accumulator

@@ -1,6 +1,7 @@
 from ..description import EnumDescriptionLoader, FlagsDescriptionLoader
 from ..errors import MappingError, UserError
 from ..member import MemberLoader
+from .file_parsing import SimpleLoader
 from .line_parsing import TokenError
 
 
@@ -32,7 +33,10 @@ class DUPLICATE_TYPE(MappingError):
     """duplicate definition for type `{key}`"""
 
 
-class _TypeLoader:
+class TypeLoader(SimpleLoader):
+    __accumulator__ = ({}, {})
+
+
     def __init__(self):
         # Track where in the accumulator we most recently added a loader.
         self._index = None
@@ -48,35 +52,27 @@ class _TypeLoader:
         )
 
 
-    def _parse_section_header(self, line_tokens):
-        section_type, name = INVALID_SECTION_HEADER.pad(line_tokens, 2, 2)
+    def _parse_section_header(self, tokens):
+        section_type, name = INVALID_SECTION_HEADER.pad(tokens, 2, 2)
         return (
             INVALID_SECTION_TYPE.singleton(section_type),
             INVALID_NAME.singleton(name, thing=section_type)
         )
 
 
-    def _continue_block(self, accumulator, line_tokens):
+    def indented(self, accumulator, tokens):
         FLOATING_INDENT.require(self._index is not None)
         # Find the most recent loader and delegate to it.
-        accumulator[self._index[0]][self._index[1]].add_line(line_tokens)
+        accumulator[self._index[0]][self._index[1]].add_line(tokens)
 
 
-    def _next_block(self, accumulator, line_tokens):
-        section_type, name = self._parse_section_header(line_tokens)
+    def unindented(self, accumulator, tokens):
+        section_type, name = self._parse_section_header(tokens)
         make_loader, index = self._categorize(section_type)
         self._index = index, name
         DUPLICATE_SECTION.add_unique(
             accumulator[index], name, make_loader(), section_type=section_type
         )
-
-
-    def __call__(self, accumulator, indent, line_tokens):
-        (self._continue_block if indent else self._next_block)(accumulator, line_tokens)
-
-
-def TypeLoader():
-    return _TypeLoader(), ({}, {}) # flag/enum data, Member (type) data
 
 
 def resolve_types(accumulator):
