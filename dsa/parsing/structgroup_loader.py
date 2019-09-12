@@ -1,5 +1,6 @@
 from ..errors import MappingError, UserError
 from ..structs import Struct, StructGroup
+from .file_parsing import SimpleLoader
 from .line_parsing import arguments, boolean, hexdump, one_of, positive_integer, TokenError
 from collections import OrderedDict
 
@@ -74,17 +75,24 @@ def parse_struct_header(line_tokens):
 
 class StructData:
     def __init__(self, line_tokens, alignment):
-        self.name, self.followers = parse_struct_header(line_tokens)
-        self.member_data = []
-        self.alignment = alignment
+        self._name, self._followers = parse_struct_header(line_tokens)
+        self._data = []
+        self._alignment = alignment
 
 
-    def create(self):
-        return (
-            self.name,
-            Struct(self.member_data, self.alignment),
-            self.followers
-        )
+    @property
+    def name(self):
+        return self._name
+
+
+    @property
+    def followers(self):
+        return self._followers
+
+
+    @property
+    def struct(self):
+        return Struct(self._data, self._alignment)
 
 
     def add_member(self, line_tokens, types):
@@ -101,57 +109,45 @@ class StructData:
         else:
             FIXED_AND_NAMED.require(name == '')
             fixed = member.parse(name, fixed)
-        self.member_data.append((member, name, fixed))
+        self._data.append((member, name, fixed))
 
 
-class StructGroupLoader:
+class StructGroupLoader(SimpleLoader):
+    # options, StructData instances. Graph is built later.
+    # the None will be replaced with an arguments object, so a list is needed.
+    __accumulator__ = [None, OrderedDict()]
+    
+
     def __init__(self, types):
-        self.types = types
-        self._reset()
+        self._types = types # type lookup used to create members
+        self._struct_name = None
 
 
-    def _reset(self):
-        self.structs = OrderedDict()
-        self.options = None
-        self.struct_data = None
-        self.graph = OrderedDict()
-
-
-    def _push_old_struct(self):
-        if self.struct_data is None:
-            return
-        name, struct, followers = self.struct_data.create()
-        DUPLICATE_STRUCT.add_unique(self.structs, name, struct)
-        self.graph[name] = followers
-        self.struct_data = None
-
-
-    def _continue_struct(self, line_tokens):
-        MEMBER_OUTSIDE_STRUCT.require(self.struct_data is not None)
-        self.struct_data.add_member(line_tokens, self.types)
-
-
-    def _new_struct(self, line_tokens):
-        self._push_old_struct()
-        self.struct_data = StructData(line_tokens, self.options.align)
-
-
-    def add_line(self, indent, line_tokens):
-        if indent:
-            self._continue_struct(line_tokens)
-        elif self.options is None:
-            self.options = parse_options(line_tokens)
+    def unindented(self, accumulator, tokens):
+        if accumulator[0] is None:
+            accumulator[0] = parse_options(tokens)
         else:
-            self._new_struct(line_tokens)
+            data = StructData(tokens, accumulator[0].align)
+            DUPLICATE_STRUCT.add_unique(accumulator[1], data.name, data)
+            self._struct_name = data.name
 
 
-    def end_file(self, label, accumulator):
-        NO_OPTIONS.require(self.options is not None)
-        self._push_old_struct()
-        NO_STRUCTS.require(bool(self.structs))
-        DUPLICATE_GROUP.add_unique(
-            accumulator, label, StructGroup(
-                self.structs, self.graph, self.options
-            )
-        )
-        self._reset()
+    def indented(self, accumulator, tokens):
+        MEMBER_OUTSIDE_STRUCT.require(self._struct_name is not None)
+        accumulator[1][self._struct_name].add_member(tokens, self._types)
+
+
+def resolve_structgroup(accumulator):
+    options, struct_data = accumulator
+    NO_OPTIONS.require(options is not None)
+    NO_STRUCTS.require(bool(struct_data))
+    # FIXME: Is order preservation actually necessary?
+    return StructGroup(
+        OrderedDict(
+            (name, data.struct) for name, data in struct_data.items()
+        ),
+        OrderedDict(
+            (name, data.followers) for name, data in struct_data.items()
+        ),
+        options
+    )

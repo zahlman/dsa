@@ -1,6 +1,6 @@
-from ..parsing.file_parsing import load_files, load_files_new, load_lines, load_lines_new # FIXME 
+from ..parsing.file_parsing import load_files, load_files_new, load_files_tagged, load_lines, load_lines_new # FIXME 
 from ..parsing.path_loader import PathLoader
-from ..parsing.structgroup_loader import StructGroupLoader
+from ..parsing.structgroup_loader import resolve_structgroup, StructGroupLoader
 from ..parsing.type_loader import resolve_types, TypeLoader
 from .tracing import timed
 from .location import folder, get as get_location
@@ -44,7 +44,14 @@ def _load_types(paths):
 
 @timed('Loading structgroups...')
 def _load_structgroups(types, paths):
-    return load_files(StructGroupLoader(types), *paths['structgroups'])
+    return {
+        name: resolve_structgroup(group)
+        for name, group in load_files_tagged(
+            paths['structgroups'],
+            StructGroupLoader.create_with_accumulator,
+            types
+        ).items()
+    }
 
 
 @timed('Loading language...')
