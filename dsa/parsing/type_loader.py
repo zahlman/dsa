@@ -12,8 +12,8 @@ class FLOATING_INDENT(UserError):
     """indented line outside block"""
 
 
-class INVALID_SECTION_HEADER(UserError):
-    """invalid section header"""
+class INVALID_SECTION_HEADER(TokenError):
+    """invalid section header (must have 2 tokens; has {actual} tokens)"""
 
 
 class INVALID_SECTION_TYPE(TokenError):
@@ -32,58 +32,54 @@ class DUPLICATE_TYPE(MappingError):
     """duplicate definition for type `{key}`"""
 
 
-class TypeLoader:
+class _TypeLoader:
     def __init__(self):
-        self._reset()
-
-
-    def _reset(self):
-        self.current_section = None
-        self.values = {}
-        self.types = {}
+        # Track where in the accumulator we most recently added a loader.
+        self._index = None
 
 
     def _categorize(self, section_type):
         return UNKNOWN_SECTION_TYPE.get(
             {
-                'flags': (FlagsDescriptionLoader, self.values),
-                'enum': (EnumDescriptionLoader, self.values),
-                'type': (MemberLoader, self.types)
+                'flags': (FlagsDescriptionLoader, 0),
+                'enum': (EnumDescriptionLoader, 0),
+                'type': (MemberLoader, 1)
             }, section_type
         )
 
 
-    def _continue_block(self, line_tokens):
-        FLOATING_INDENT.require(self.current_section is not None)
-        self.current_section.add_line(line_tokens)
-
-
-    def _next_block(self, line_tokens):
-        INVALID_SECTION_HEADER.require(len(line_tokens) == 2)
-        section_type, name = line_tokens
-        section_type, = INVALID_SECTION_TYPE.pad(section_type, 1, 1)
-        name, = INVALID_NAME.pad(name, 1, 1, thing=section_type)
-        loader, container = self._categorize(section_type)
-        section = loader()
-        DUPLICATE_SECTION.add_unique(
-            container, name, section, section_type=section_type
+    def _parse_section_header(self, line_tokens):
+        section_type, name = INVALID_SECTION_HEADER.pad(line_tokens, 2, 2)
+        return (
+            INVALID_SECTION_TYPE.singleton(section_type),
+            INVALID_NAME.singleton(name, thing=section_type)
         )
-        self.current_section = section
 
 
-    def add_line(self, indent, line_tokens):
-        (self._continue_block if indent else self._next_block)(line_tokens)
+    def _continue_block(self, accumulator, line_tokens):
+        FLOATING_INDENT.require(self._index is not None)
+        # Find the most recent loader and delegate to it.
+        accumulator[self._index[0]][self._index[1]].add_line(line_tokens)
 
 
-    def end_file(self, label, accumulator):
-        # `label` is ignored; we don't care what source the data came from.
-        # Add all Member objects to the accumulator.
-        description_lookup = {
-            name: lsm.result()
-            for name, lsm in self.values.items()
-        }
-        for name, lsm in self.types.items():
-            DUPLICATE_TYPE.add_unique(
-                accumulator, name, lsm.result(name, description_lookup)
-            )
-        self._reset()
+    def _next_block(self, accumulator, line_tokens):
+        section_type, name = self._parse_section_header(line_tokens)
+        make_loader, index = self._categorize(section_type)
+        self._index = index, name
+        DUPLICATE_SECTION.add_unique(
+            accumulator[index], name, make_loader(), section_type=section_type
+        )
+
+
+    def __call__(self, accumulator, indent, line_tokens):
+        (self._continue_block if indent else self._next_block)(accumulator, line_tokens)
+
+
+def TypeLoader():
+    return _TypeLoader(), ({}, {}) # flag/enum data, Member (type) data
+
+
+def resolve_types(accumulator):
+    values, types = accumulator
+    lookup = { name: lsm.result() for name, lsm in values.items() }
+    return { name: lsm.result(name, lookup) for name, lsm in types.items() }

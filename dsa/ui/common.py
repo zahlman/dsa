@@ -1,7 +1,7 @@
 from ..parsing.file_parsing import load_files, load_files_new, load_lines, load_lines_new # FIXME 
 from ..parsing.path_loader import PathLoader
 from ..parsing.structgroup_loader import StructGroupLoader
-from ..parsing.type_loader import TypeLoader
+from ..parsing.type_loader import resolve_types, TypeLoader
 from .tracing import timed
 from .location import folder, get as get_location
 
@@ -34,7 +34,7 @@ def _load_paths(pathfile):
 
 @timed('Loading types...')
 def _load_types(paths):
-    return load_files(TypeLoader(), *paths['types'])
+    return resolve_types(load_files_new(paths['types'], TypeLoader))
 
 
 @timed('Loading structgroups...')
