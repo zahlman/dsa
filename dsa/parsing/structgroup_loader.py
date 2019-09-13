@@ -113,41 +113,38 @@ class StructData:
 
 
 class StructGroupLoader(SimpleLoader):
-    # options, StructData instances. Graph is built later.
-    # the None will be replaced with an arguments object, so a list is needed.
-    __accumulator__ = [None, OrderedDict()]
-    
-
     def __init__(self, types):
         self._types = types # type lookup used to create members
         self._struct_name = None
+        self._options = None
+        self._struct_data = OrderedDict()
 
 
-    def unindented(self, accumulator, tokens):
-        if accumulator[0] is None:
-            accumulator[0] = parse_options(tokens)
+    def unindented(self, tokens):
+        if self._options is None:
+            self._options = parse_options(tokens)
         else:
-            data = StructData(tokens, accumulator[0].align)
-            DUPLICATE_STRUCT.add_unique(accumulator[1], data.name, data)
+            data = StructData(tokens, self._options.align)
+            DUPLICATE_STRUCT.add_unique(self._struct_data, data.name, data)
             self._struct_name = data.name
 
 
-    def indented(self, accumulator, tokens):
+    def indented(self, tokens):
         MEMBER_OUTSIDE_STRUCT.require(self._struct_name is not None)
-        accumulator[1][self._struct_name].add_member(tokens, self._types)
+        self._struct_data[self._struct_name].add_member(tokens, self._types)
 
 
-def resolve_structgroup(accumulator):
-    options, struct_data = accumulator
-    NO_OPTIONS.require(options is not None)
-    NO_STRUCTS.require(bool(struct_data))
-    # FIXME: Is order preservation actually necessary?
-    return StructGroup(
-        OrderedDict(
-            (name, data.struct) for name, data in struct_data.items()
-        ),
-        OrderedDict(
-            (name, data.followers) for name, data in struct_data.items()
-        ),
-        options
-    )
+    def result(self):
+        NO_OPTIONS.require(self._options is not None)
+        data = self._struct_data
+        NO_STRUCTS.require(len(data) > 0)
+        # FIXME: Is order preservation actually necessary?
+        return StructGroup(
+            OrderedDict(
+                (name, datum.struct) for name, datum in data.items()
+            ),
+            OrderedDict(
+                (name, datum.followers) for name, datum in data.items()
+            ),
+            self._options
+        )

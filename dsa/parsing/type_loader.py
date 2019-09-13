@@ -34,20 +34,20 @@ class DUPLICATE_TYPE(MappingError):
 
 
 class TypeLoader(SimpleLoader):
-    __accumulator__ = ({}, {})
-
-
     def __init__(self):
-        # Track where in the accumulator we most recently added a loader.
-        self._index = None
+        # Either a DescriptionLoader from self._descriptions
+        # or a MemberLoader from self._members.
+        self._current_datum = None
+        self._descriptions = {}
+        self._members = {}
 
 
     def _categorize(self, section_type):
         return UNKNOWN_SECTION_TYPE.get(
             {
-                'flags': (FlagsDescriptionLoader, 0),
-                'enum': (EnumDescriptionLoader, 0),
-                'type': (MemberLoader, 1)
+                'flags': (FlagsDescriptionLoader, self._descriptions),
+                'enum': (EnumDescriptionLoader, self._descriptions),
+                'type': (MemberLoader, self._members)
             }, section_type
         )
 
@@ -60,22 +60,25 @@ class TypeLoader(SimpleLoader):
         )
 
 
-    def indented(self, accumulator, tokens):
-        FLOATING_INDENT.require(self._index is not None)
-        # Find the most recent loader and delegate to it.
-        accumulator[self._index[0]][self._index[1]].add_line(tokens)
+    def indented(self, tokens):
+        FLOATING_INDENT.require(self._current_datum is not None)
+        self._current_datum.add_line(tokens)
 
 
-    def unindented(self, accumulator, tokens):
+    def unindented(self, tokens):
         section_type, name = self._parse_section_header(tokens)
-        make_loader, index = self._categorize(section_type)
-        self._index = index, name
+        cls, storage = self._categorize(section_type)
+        self._current_datum = cls()
         DUPLICATE_SECTION.add_unique(
-            accumulator[index], name, make_loader(), section_type=section_type
+            storage, name, self._current_datum, section_type=section_type
         )
 
 
-def resolve_types(accumulator):
-    values, types = accumulator
-    lookup = { name: lsm.result() for name, lsm in values.items() }
-    return { name: lsm.result(name, lookup) for name, lsm in types.items() }
+    def result(self):
+        lookup = {
+            name: lsm.result() for name, lsm in self._descriptions.items()
+        }
+        return {
+            name: lsm.result(name, lookup)
+            for name, lsm in self._members.items()
+        }

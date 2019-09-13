@@ -143,23 +143,15 @@ class SourceAccumulator:
         self._chunk_open = False
 
 
-    def resolve(self):
-        UNMATCHED_BRACE.require(self.closed)
-        result = {}
-        for chunk in self._chunks:
-            key, value = chunk.complete(self._labels)
-            DUPLICATE_CHUNK_LOCATION.add_unique(result, key, value)
-        return result
-
-
 class SourceLoader:
     def __init__(self, structgroups):
         self.filter_stack = []
-        self.labels = {}
         self.all_groups = structgroups
+        # Factor out most of the internal state.
+        self._accumulator = SourceAccumulator()
 
 
-    def _dispatch(self, accumulator, first, rest):
+    def _dispatch(self, first, rest):
         UNRECOGNIZED_DIRECTIVE.get(
             {
                 'label': self._process_label,
@@ -167,12 +159,12 @@ class SourceLoader:
                 'group': self._process_group
             },
             first
-        )(accumulator, rest)
+        )(rest)
 
 
-    def _process_label(self, accumulator, tokens):
+    def _process_label(self, tokens):
         name, position = INVALID_LABEL.pad(tokens, 1, 2)
-        accumulator.add_label(
+        self._accumulator.add_label(
             INVALID_LABEL_NAME.singleton(name),
             INVALID_LABEL_POSITION.convert(UserError, integer, position)
         )
@@ -185,30 +177,30 @@ class SourceLoader:
         return args
 
 
-    def _process_filter(self, accumulator, tokens):
+    def _process_filter(self, tokens):
         # TODO actually create some kind of Filter object.
         self.filter_stack.append(self._verify_brace(tokens, 'filter'))
 
 
-    def _process_group(self, accumulator, tokens):
+    def _process_group(self, tokens):
         tokens = self._verify_brace(tokens, 'group')
         tokens = GROUPNAME_SINGLE.singleton(tokens) # single token...
         tokens = GROUPNAME_SINGLE.singleton(tokens) # with a single part
-        accumulator.start_chunk(
+        self._accumulator.start_chunk(
             self.filter_stack.copy(),
             UNRECOGNIZED_GROUP_NAME.get(self.all_groups, tokens)
         )
 
 
-    def _close_directive(self, accumulator):
-        if accumulator.closed:
+    def _close_directive(self):
+        if self._accumulator.closed:
             # then the brace must be closing a filter.
             UNMATCHED_BRACE.convert(IndexError, self.filter_stack.pop)
         else:
-            accumulator.finish_chunk()
+            self._accumulator.finish_chunk()
 
 
-    def __call__(self, accumulator, indent, tokens):
+    def line(self, indent, tokens):
         # Indentation is irrelevant.
         assert tokens # empty lines were preprocessed out.
         first, *rest = tokens
@@ -216,15 +208,20 @@ class SourceLoader:
         # are implemented for single-struct groups.
         first = BAD_LINE_START.singleton(first)
         if first.startswith('@'):
-            DIRECTIVE_INSIDE_CHUNK.require(accumulator.closed)
-            self._dispatch(accumulator, first[1:], rest)
+            DIRECTIVE_INSIDE_CHUNK.require(self._accumulator.closed)
+            self._dispatch(first[1:], rest)
         elif first == '}':
             JUNK_AFTER_CLOSE_BRACE.require(not rest)
-            self._close_directive(accumulator)
+            self._close_directive()
         else:
-            NON_DIRECTIVE_OUTSIDE_CHUNK.require(not accumulator.closed)
-            accumulator.add_line(tokens)
+            NON_DIRECTIVE_OUTSIDE_CHUNK.require(not self._accumulator.closed)
+            self._accumulator.add_line(tokens)
     
-    
-def make_sourceloader(structgroups):
-    return SourceLoader(structgroups), SourceAccumulator()
+
+    def result(self):
+        UNMATCHED_BRACE.require(self._accumulator.closed)
+        processed = {}
+        for chunk in self._accumulator._chunks:
+            key, value = chunk.complete(self._accumulator._labels)
+            DUPLICATE_CHUNK_LOCATION.add_unique(processed, key, value)
+        return processed

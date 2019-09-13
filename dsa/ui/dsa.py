@@ -1,5 +1,5 @@
 from ..parsing.file_parsing import load_files
-from ..parsing.source_loader import make_sourceloader
+from ..parsing.source_loader import SourceLoader 
 from .common import get_data, load_language
 from .entrypoint import entry_point, param
 from .tracing import timed, trace
@@ -12,7 +12,7 @@ from functools import partial
 # two different diagnostic messages for this,
 # so the decoration is invoked dynamically.
 def _assemble(verbose, infilename, outfilename, language):
-    chunks = load_files([outfilename], make_sourceloader, language).resolve()
+    chunks = load_files([outfilename], SourceLoader, language)
     with open(infilename, 'rb') as f:
         data = bytearray(f.read())
     for position, chunk in chunks.items():

@@ -34,17 +34,15 @@ _PATH_TYPES = ('types', 'structgroups')
 
 
 class PathLoader(SimpleLoader):
-    __accumulator__ = {k: set() for k in _PATH_TYPES}
-
-
     def __init__(self, system_root, config_root):
         self._root = None
         self._kind = None
         self._system_root = system_root
         self._config_root = config_root
+        self._accumulator = {k: set() for k in _PATH_TYPES}
 
 
-    def unindented(self, accumulator, tokens):
+    def unindented(self, tokens):
         kind, root = JUNK_ROOT.pad(tokens, 1, 2)
         kind = one_of(*_PATH_TYPES)(kind)
         root = JUNK_ROOT.singleton(root)
@@ -56,9 +54,9 @@ class PathLoader(SimpleLoader):
         self._kind = kind
 
 
-    def indented(self, accumulator, tokens):
+    def indented(self, tokens):
         FLOATING_MODULE.require(self._kind is not None)
-        pathdict = accumulator[self._kind]
+        pathdict = self._accumulator[self._kind]
         *parts, last = [
             INVALID_PATH_COMPONENT.singleton(t)
             for t in tokens
@@ -74,3 +72,7 @@ class PathLoader(SimpleLoader):
         pattern = os.path.join(self._root, *parts, *last)
         for path in glob(pattern, recursive=True):
             pathdict.add(os.path.realpath(path))
+
+
+    def result(self):
+        return self._accumulator

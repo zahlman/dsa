@@ -1,7 +1,7 @@
 from ..parsing.file_parsing import load_files, load_files_tagged, load_lines
 from ..parsing.path_loader import PathLoader
-from ..parsing.structgroup_loader import resolve_structgroup, StructGroupLoader
-from ..parsing.type_loader import resolve_types, TypeLoader
+from ..parsing.structgroup_loader import StructGroupLoader
+from ..parsing.type_loader import TypeLoader
 from .tracing import timed
 from .location import folder, get as get_location
 
@@ -27,31 +27,21 @@ _DEFAULT_PATHS = [
 @timed('Loading definition paths...')
 def _load_paths(pathfile):
     root = get_location()
-    setup = PathLoader.create_with_accumulator
     return (
-        load_lines(_DEFAULT_PATHS, setup, root, root)
+        load_lines(_DEFAULT_PATHS, PathLoader, root, root)
         if pathfile is None
-        else load_files([pathfile], setup, root, folder(pathfile))
+        else load_files([pathfile], PathLoader, root, folder(pathfile))
     )
 
 
 @timed('Loading types...')
 def _load_types(paths):
-    return resolve_types(
-        load_files(paths['types'], TypeLoader.create_with_accumulator)
-    )
+    return load_files(paths['types'], TypeLoader)
 
 
 @timed('Loading structgroups...')
 def _load_structgroups(types, paths):
-    return {
-        name: resolve_structgroup(group)
-        for name, group in load_files_tagged(
-            paths['structgroups'],
-            StructGroupLoader.create_with_accumulator,
-            types
-        ).items()
-    }
+    return load_files_tagged(paths['structgroups'], StructGroupLoader, types)
 
 
 @timed('Loading language...')

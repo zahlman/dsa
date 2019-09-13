@@ -34,46 +34,49 @@ def process(lines):
 
 
 class SimpleLoader:
-    """A Loader implementation that checks for a single level of indentation
-    and creates its accumulator by cloning."""
-    @classmethod
-    def create_with_accumulator(cls, *args, **kwargs):
-        return cls(*args, **kwargs), deepcopy(cls.__accumulator__)
+    """A Loader implementation that checks for a single level of indentation."""
+    def line(self, indent, tokens):
+        """Called repeatedly with lines of the data being loaded."""
+        (self.indented if indent else self.unindented)(tokens)
 
 
-    def __call__(self, accumulator, indent, tokens):
-        (self.indented if indent else self.unindented)(accumulator, tokens)
+    def result(self):
+        """Do any deferred processing on the loaded data and return an object
+        representing the result.
+        The loader will not be used again after this call, so this method
+        may destroy internal state or return a reference thereto."""
+        raise NotImplemented
 
 
-def feed(source_name, loader, accumulator, lines):
+def feed(source_name, loader, lines):
     trace(f'Loading: {source_name}')
     for position, indent, line_tokens in lines:
         wrap_errors(
             f'{source_name}: Line {position}',
-            loader, accumulator, indent, line_tokens
+            loader, indent, line_tokens
         )
 
 
 def load_lines(lines, make_loader, *args, **kwargs):
-    loader, accumulator = make_loader(*args, **kwargs)
-    feed("String data", loader, accumulator, process(lines))
-    return accumulator
+    loader = make_loader(*args, **kwargs)
+    feed("String data", loader.line, process(lines))
+    return loader.result()
 
 
 def load_files(filenames, make_loader, *args, **kwargs):
-    loader, accumulator = make_loader(*args, **kwargs)
+    loader = make_loader(*args, **kwargs)
     for filename in filenames:
         with open(filename) as f:
-            feed(f"File '{filename}'", loader, accumulator, process(f))
-    return accumulator
+            feed(f"File '{filename}'", loader.line, process(f))
+    return loader.result()
 
 
 def load_files_tagged(filenames, make_loader, *args, **kwargs):
     result = {}
     for filename in filenames:
-        loader, accumulator = make_loader(*args, **kwargs)
+        loader = make_loader(*args, **kwargs)
         label = os.path.splitext(os.path.basename(filename))[0]
         with open(filename) as f:
-            feed(f"File '{filename}'", loader, accumulator, process(f))
-        DUPLICATE_FILE.add_unique(result, label, accumulator)
+            feed(f"File '{filename}'", loader.line, process(f))
+        DUPLICATE_FILE.add_unique(result, label, loader.result())
     return result 
