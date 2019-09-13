@@ -1,4 +1,4 @@
-from ..parsing.file_parsing import load_files, load_files_new, load_files_tagged, load_lines, load_lines_new # FIXME 
+from ..parsing.file_parsing import load_files, load_files_tagged, load_lines
 from ..parsing.path_loader import PathLoader
 from ..parsing.structgroup_loader import resolve_structgroup, StructGroupLoader
 from ..parsing.type_loader import resolve_types, TypeLoader
@@ -29,16 +29,16 @@ def _load_paths(pathfile):
     root = get_location()
     setup = PathLoader.create_with_accumulator
     return (
-        load_lines_new(_DEFAULT_PATHS, setup, root, root)
+        load_lines(_DEFAULT_PATHS, setup, root, root)
         if pathfile is None
-        else load_files_new([pathfile], setup, root, folder(pathfile))
+        else load_files([pathfile], setup, root, folder(pathfile))
     )
 
 
 @timed('Loading types...')
 def _load_types(paths):
     return resolve_types(
-        load_files_new(paths['types'], TypeLoader.create_with_accumulator)
+        load_files(paths['types'], TypeLoader.create_with_accumulator)
     )
 
 
