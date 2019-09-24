@@ -216,7 +216,7 @@ class SourceLoader:
         else:
             NON_DIRECTIVE_OUTSIDE_CHUNK.require(not self._accumulator.closed)
             self._accumulator.add_line(tokens)
-    
+
 
     def result(self):
         UNMATCHED_BRACE.require(self._accumulator.closed)

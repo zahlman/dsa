@@ -1,5 +1,5 @@
 from ..parsing.file_parsing import load_files
-from ..parsing.source_loader import SourceLoader 
+from ..parsing.source_loader import SourceLoader
 from .common import get_data, load_language
 from .entrypoint import entry_point, param
 from .tracing import timed, trace

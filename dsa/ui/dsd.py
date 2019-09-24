@@ -1,6 +1,6 @@
 from ..disassembly import Disassembler
 from .common import get_data, load_language
-from .dsa import reassemble 
+from .dsa import reassemble
 from .entrypoint import entry_point, param
 from .tracing import timed, trace
 

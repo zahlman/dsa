@@ -79,4 +79,4 @@ def load_files_tagged(filenames, make_loader, *args, **kwargs):
         with open(filename) as f:
             feed(f"File '{filename}'", loader.line, process(f))
         DUPLICATE_FILE.add_unique(result, label, loader.result())
-    return result 
+    return result
