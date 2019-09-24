@@ -90,19 +90,19 @@ class Struct:
     def extract(self, name, source, position):
         match = self.pattern.match(source, position)
         return None if match is None else (
-            name, self, match, [
+            name, match, [
                 referent
                 for member, name, value in self._match_handlers(match)
                 for referent in member.referents(name, value)
-            ]
+            ], self.size
         )
 
 
-    def format(self, match, labels):
+    def format(self, match, lookup):
         return tuple(
-            member.format(name, value, labels)
+            member.format(name, value, lookup)
             for member, name, value in self._match_handlers(match)
-        ), self.size
+        )
 
 
     def parse(self, tokens):
@@ -197,17 +197,20 @@ class StructGroup:
 
     def extract(self, source, position, previous, count):
         candidates = self._candidates(source, position, previous, count)
+        if not candidates:
+            return None
+        # name, match, referents, size
         return NO_MATCH.first_not_none((
             self.structs[name].extract(name, source, position)
             for name in candidates
-        ), position = position) if candidates else None
+        ), position = position)
 
 
-    def format_from(self, name, struct, match, position, labels):
-        return name, errors.wrap(
-            f'Struct {name} (at 0x{position:X})',
-            struct.format, match, labels
+    def format(self, tag, name, match, lookup):
+        tokens = errors.wrap(
+            tag, self.structs[name].format, match, lookup
         )
+        return (name,) + tokens
 
 
     def parse(self, tokens, count, previous):

@@ -65,15 +65,15 @@ class Member:
         return result
 
 
-    def _format(self, value, labels):
+    def _format(self, value, lookup):
         return ', '.join(
-            field.format(raw, labels)
+            field.format(raw, lookup)
             for field, raw in self._raw_values(value)
         )
 
 
-    def format(self, name, value, labels):
-        return errors.wrap(self._tag(name), self._format, value, labels)
+    def format(self, name, value, lookup):
+        return errors.wrap(self._tag(name), self._format, value, lookup)
 
 
     def _parse(self, items):

@@ -83,13 +83,12 @@ class Field:
             yield (self.referent, self.translation.value(raw), name)
 
 
-    def format(self, raw, labels):
+    def format(self, raw, lookup):
         value = self.translation.value(raw)
         return (
             self.description.format(value, self.formatter)
             if self.referent is None # not a pointer type
-            else 'NULL' if value not in labels # unresolved pointer
-            else f'@{labels[value]}' # resolved pointer
+            else lookup(value) # pointer
         )
 
 

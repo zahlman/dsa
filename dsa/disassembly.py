@@ -8,114 +8,137 @@ class CHUNK_TYPE_CONFLICT(UserError):
     """conflicting requests for parsing data at 0x{where:X}"""
 
 
-class Disassembler:
-    def __init__(self, structgroups, root, location, label_base):
-        self.labels = {} # position -> label
-        self.used_groups = {} # position -> name of structgroup
-        self.sizes = {} # position -> size of chunk data
-        self.chunks = {} # position -> disassembled chunk
-        self.pending_groups = {} # position -> name of structgroup
-        self.all_groups = structgroups # name -> StructGroup instance
-        self.add(root, location, label_base)
+class _Chunk:
+    def __init__(self, group_name, label):
+        self._group_name = group_name
+        self._label = label
+        self._lines = []
+        self._size = 0
+        self._loaded = False
 
 
-    def get_label(self, location, base):
-        if location in self.labels:
-            return self.labels[location]
-        used = set(self.labels.values())
+    @property # read-only
+    def label(self):
+        return self._label
+
+
+    @property # read-only
+    def size(self):
+        return self._size
+
+
+    @property # read-only
+    def group_name(self):
+        return self._group_name
+
+
+    def _match_data(self, group, tag, source, position):
+        previous = None
+        for i in count():
+            result = wrap_errors(
+                tag, group.extract, source, position, previous, i
+            )
+            if result is None:
+                self._size += group.terminator_size
+                break
+            previous, match, referents, size = result
+            self._size += size
+            position += size
+            yield previous, match, referents, position
+
+
+    def load(self, source, start, group_lookup, registry):
+        group_name = self._group_name
+        try:
+            group = group_lookup[group_name]
+        except KeyError: # skip chunk for unknown group
+            trace(f'Warning: skipping chunk of unknown type {group_name}')
+            return # we end up with an empty chunk.
+        group.check_alignment(start)
+        tag = f'Structgroup {group_name} (chunk starting at 0x{start:X})'
+        data = self._match_data(group, tag, source, start)
+        for thing in data:
+            struct_name, match, referents, position = thing
+            for referent in referents:
+                registry.register(*referent)
+            self._lines.extend(format_line(group.format(
+                f'Struct {struct_name} (at 0x{position:X})',
+                struct_name, match, registry.label_ref
+            )))
+        self._loaded = True
+
+
+    def write_to(self, outfile, location):
+        outfile.write(f'@label {wrap_multiword(self._label)} 0x{location:X}\n')
+        if self._loaded:
+            outfile.write(f'@filter size {self._size} {{\n')
+            outfile.write(f'@group {self._group_name} {{\n')
+            for line in self._lines:
+                outfile.write(f'{line}\n')
+            outfile.write('}\n')
+            outfile.write(f'}} # end:0x{location+self._size:X}\n')
+        outfile.write('\n')
+
+
+class _ChunkRegistry:
+    def __init__(self, root_group_name, root_location):
+        self._chunks = {} # position -> Chunk (disassembled or pending)
+        self._pending = set() # positions of pending Chunks
+        self._labels = set() # string label names of Chunks
+        self.register(root_group_name, root_location, 'main')
+
+
+    def _make_label(self, base):
         for i in count(1):
             suggestion = base if i == 1 else f'{base} {i}'
-            if suggestion not in used:
-                self.labels[location] = suggestion
+            if suggestion not in self._labels:
                 return suggestion
 
 
-    def _store_result(self, location, group_name, chunk, size):
-        self.used_groups[location] = group_name
-        self.chunks[location] = chunk
-        self.sizes[location] = size
-
-
-    def _make_chunk(self, source, location, group, group_name):
-        position = location
-        previous = None
-        lines = []
-        group.check_alignment(position)
-        for i in count():
-            result = wrap_errors(
-                f'Structgroup {group_name} (chunk starting at 0x{location:X})',
-                group.extract, source, position, previous, i
-            )
-            if result is None:
-                position += group.terminator_size
-                break
-            struct_name, struct, match, referents = result
-            for group_name, next_location, field_name in referents:
-                self.add(group_name, next_location, field_name)
-            # TODO: process (structgroup name, location) pairs from `referents`.
-            previous, (tokens, size) = group.format_from(
-                struct_name, struct, match, position, self.labels
-            )
-            lines.extend(format_line((previous,) + tokens))
-            position += size
-        return lines, position - location
-
-
-    def add(self, group_name, location, label_base):
-        if location in self.used_groups:
-            CHUNK_TYPE_CONFLICT.require(
-                group_name == self.used_groups[location], where=location
-            )
-        elif location in self.pending_groups:
-            CHUNK_TYPE_CONFLICT.require(
-                group_name == self.pending_groups[location], where=location
-            )
-        else:
-            if not 0 <= location:
-                # This is a stopgap until referents are fixed properly.
-                trace(f'Warning: skipping chunk at negative address')
-                return 'NULL'
-            else:
-                self.pending_groups[location] = group_name
-        return self.get_label(location, label_base)
-
-
-    def _process_one(self, source):
-        # Grab the next chunk to process.
-        location = next(iter(self.pending_groups.keys()))
-        group_name = self.pending_groups.pop(location)
+    def next_chunk(self):
         try:
-            group = self.all_groups[group_name]
-        except KeyError: # skip chunk for unknown group
-            trace(f'Warning: skipping chunk of unknown type {group_name}')
+            position = self._pending.pop()
+        except KeyError:
+            return None
+        return position, self._chunks[position]
+
+
+    def register(self, group_name, location, label_base):
+        if location in self._chunks:
+            CHUNK_TYPE_CONFLICT.require(
+                group_name == self._chunks[location].group_name,
+                where=location
+            )
+        elif location < 0:
+            # FIXME?
+            trace(f'Warning: skipping chunk at negative address')
         else:
-            chunk, size = self._make_chunk(source, location, group, group_name)
-            self._store_result(location, group_name, chunk, size)
+            label = self._make_label(label_base)
+            self._chunks[location] = _Chunk(group_name, label)
+            self._pending.add(location)
+            self._labels.add(label)
 
 
-    def _write_chunk(self, outfile, location):
-        group_name = wrap_multiword(self.used_groups[location])
-        size = self.sizes[location]
-        chunk = self.chunks[location]
-        outfile.write(f'@filter size {size} {{\n')
-        outfile.write(f'@group {group_name} {{\n')
-        for line in chunk:
-            outfile.write(f'{line}\n')
-        outfile.write('}\n')
-        outfile.write(f'}} # end:0x{location+size:X}\n')
+    def label_ref(self, location):
+        if location not in self._chunks:
+            # FIXME handle null pointers a better way.
+            return 'NULL' if location == 0 else 'UNKNOWN'
+        return f'@{self._chunks[location].label}'
 
 
-    def _dump(self, outfile):
-        for location in sorted(self.labels.keys()):
-            label = wrap_multiword(self.labels[location])
-            outfile.write(f'@label {label} 0x{location:X}\n')
-            if location in self.chunks:
-                self._write_chunk(outfile, location)
-            outfile.write('\n')
+    def write_to(self, outfile):
+        for location, chunk in sorted(self._chunks.items()):
+            chunk.write_to(outfile, location)
+
+
+class Disassembler:
+    def __init__(self, group_lookup, group_name, location):
+        self._registry = _ChunkRegistry(group_name, location)
+        self._group_lookup = group_lookup
 
 
     def __call__(self, source, outfilename):
-        while self.pending_groups:
-            self._process_one(source)
+        for position, chunk in iter(self._registry.next_chunk, None):
+            chunk.load(source, position, self._group_lookup, self._registry)
         with open(outfilename, 'w') as outfile:
-            self._dump(outfile)
+            self._registry.write_to(outfile)

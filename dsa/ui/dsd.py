@@ -10,7 +10,7 @@ from .tracing import timed, trace
 
 @timed('Disassembling...')
 def _disassemble(language, group_name, position, data, output):
-    Disassembler(language, group_name, position, 'main')(data, output)
+    Disassembler(language, group_name, position)(data, output)
 
 
 @param('output', 'output file name')
