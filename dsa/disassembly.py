@@ -44,13 +44,18 @@ class Disassembler:
         for i in count():
             result = wrap_errors(
                 f'Structgroup {group_name} (chunk starting at 0x{location:X})',
-                group.format_from, source, position, previous, i, self
+                group.extract, source, position, previous, i
             )
             if result is None:
                 position += group.terminator_size
                 break
-            # TODO: possibly get new chunk requests here.
-            previous, (tokens, size) = result
+            struct_name, struct, match, referents = result
+            for group_name, next_location, field_name in referents:
+                self.add(group_name, next_location, field_name)
+            # TODO: process (structgroup name, location) pairs from `referents`.
+            previous, (tokens, size) = group.format_from(
+                struct_name, struct, match, position, self.labels
+            )
             lines.extend(format_line((previous,) + tokens))
             position += size
         return lines, position - location

@@ -83,16 +83,25 @@ class Struct:
         return len(self.template)
 
 
-    def format_from(self, source, position, disassembler):
+    def _match_handlers(self, match):
+        return zip(self.members, self.names, match.groups())
+
+
+    def extract(self, name, source, position):
         match = self.pattern.match(source, position)
-        if match is None:
-            # This struct wasn't matched, but maybe another one will be.
-            return None
+        return None if match is None else (
+            name, self, match, [
+                referent
+                for member, name, value in self._match_handlers(match)
+                for referent in member.referents(name, value)
+            ]
+        )
+
+
+    def format(self, match, labels):
         return tuple(
-            member.format(name, value, disassembler)
-            for member, name, value in zip(
-                self.members, self.names, match.groups()
-            )
+            member.format(name, value, labels)
+            for member, name, value in self._match_handlers(match)
         ), self.size
 
 
@@ -186,25 +195,19 @@ class StructGroup:
         return result
 
 
-    def _try_candidate(self, name, source, position, disassembler):
-        assert name in self.structs
-        result = errors.wrap(
-            f'Struct {name} (at 0x{position:X})',
-            self.structs[name].format_from, source, position, disassembler
-        )
-        if result is not None:
-            result = name, result
-        return result
-
-
-    def format_from(self, source, position, previous, count, disassembler):
+    def extract(self, source, position, previous, count):
         candidates = self._candidates(source, position, previous, count)
-        if not candidates:
-            return None
         return NO_MATCH.first_not_none((
-            self._try_candidate(name, source, position, disassembler)
+            self.structs[name].extract(name, source, position)
             for name in candidates
-        ), position=position)
+        ), position = position) if candidates else None
+
+
+    def format_from(self, name, struct, match, position, labels):
+        return name, errors.wrap(
+            f'Struct {name} (at 0x{position:X})',
+            struct.format, match, labels
+        )
 
 
     def parse(self, tokens, count, previous):

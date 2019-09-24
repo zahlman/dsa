@@ -78,21 +78,19 @@ class Field:
         return self.translation.size
 
 
-    # When formatting, exceptions are not raised at this level, since some
-    # source data might only be formattable by certain Options. Instead, we
-    # return `None` and let the Member iterate to an Option that works.
-    def format(self, raw, disassembler, name):
+    def referents(self, raw, name):
+        if self.referent is not None:
+            yield (self.referent, self.translation.value(raw), name)
+
+
+    def format(self, raw, labels):
         value = self.translation.value(raw)
-        result = self.description.format(value, self.formatter)
-        if result is None or self.referent is None:
-            return result
-        # If we have a valid pointer, inform the disassembler about it,
-        # and get a label name from there.
-        # XXX hack 'NULL' into submission.
-        HAX = disassembler.add(self.referent, value, name)
-        if HAX != 'NULL':
-            HAX = '@' + HAX
-        return HAX
+        return (
+            self.description.format(value, self.formatter)
+            if self.referent is None # not a pointer type
+            else 'NULL' if value not in labels # unresolved pointer
+            else f'@{labels[value]}' # resolved pointer
+        )
 
 
     def parse(self, text):

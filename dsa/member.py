@@ -43,24 +43,37 @@ class Member:
         return f'Member `{name}` (of type `{self.typename}`)'
 
 
-    def _format(self, name, value, disassembler):
+    def _raw_values(self, value):
         value = int.from_bytes(value, 'little')
         BAD_FIXED_VALUE.require(
             (value & self.fixed_mask) == self.fixed_value
         )
-        # Collect results for each field. FIXME: cleaner label handling?
+        for offset, field in zip(self.offsets, self.fields):
+            yield field, _extract(value, offset, field.size)
+
+
+    def _referents(self, value, name):
+        return [
+            referent
+            for field, raw in self._raw_values(value)
+            for referent in field.referents(raw, name)
+        ]
+
+
+    def referents(self, name, value):
+        result = errors.wrap(self._tag(name), self._referents, value, name)
+        return result
+
+
+    def _format(self, value, labels):
         return ', '.join(
-            field.format(
-                _extract(value, offset, field.size), disassembler, name
-            )
-            for offset, field in zip(self.offsets, self.fields)
+            field.format(raw, labels)
+            for field, raw in self._raw_values(value)
         )
 
 
-    def format(self, name, value, disassembler):
-        return errors.wrap(
-            self._tag(name), self._format, name, value, disassembler
-        )
+    def format(self, name, value, labels):
+        return errors.wrap(self._tag(name), self._format, value, labels)
 
 
     def _parse(self, items):
