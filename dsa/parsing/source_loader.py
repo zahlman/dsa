@@ -1,4 +1,5 @@
-from ..errors import parse_int, MappingError, UserError
+from ..errors import MappingError, UserError
+from ..ui.tracing import trace
 from .line_parsing import integer, TokenError
 
 
@@ -6,52 +7,40 @@ class UNRECOGNIZED_LABEL(MappingError):
     """unrecognized label `@{key}`"""
 
 
-class UNRECOGNIZED_DIRECTIVE(MappingError):
-    """unrecognized directive `@{key}`"""
+class LABEL_PARAMS(TokenError):
+    """chunk-internal label may not have parameters"""
 
 
-class INVALID_LABEL(TokenError):
-    """invalid syntax for `@label` directive"""
+class UNCLOSED_CHUNK(TokenError):
+    """missing `@@` line to close chunk before starting a new one"""
 
 
-class INVALID_LABEL_NAME(TokenError):
-    """`@label` name must be a single-part token (has {actual} parts)"""
+class BAD_GROUP_LINE(TokenError):
+    """bad group line; should be @@<group name> <chunk name> <position>"""
 
 
-class INVALID_LABEL_POSITION(TokenError):
-    """`@label` position must be a single-part token (has {actual} parts)"""
+class BAD_CHUNK_NAME(TokenError):
+    """chunk name must be single-part token (has {actual} parts)"""
 
 
-class MISSING_BRACE(UserError):
-    """missing open brace for `@{directive}` directive"""
+class STRUCT_OUTSIDE_CHUNK(TokenError):
+    """struct must be inside a chunk"""
 
 
-class UNRECOGNIZED_GROUP_NAME(MappingError):
-    """unrecognized group name `{key}`"""
+class NO_CHUNK_DEFINITION(TokenError):
+    """chunk has no group/chunk name line"""
 
 
-class GROUPNAME_SINGLE(TokenError):
-    """group name must be a single, single-part token"""
+class UNSUPPORTED_GROUP(TokenError):
+    """`{name}` group is unsupported"""
 
 
-class UNMATCHED_BRACE(UserError):
-    """unmatched opening or closing brace"""
+class TOO_MANY_ATS(TokenError):
+    """unrecognized directive; may have at most two @ signs"""
 
 
 class BAD_LINE_START(TokenError):
     """directive or struct name must be single-part token (has {actual} parts)"""
-
-
-class DIRECTIVE_INSIDE_CHUNK(UserError):
-    """directives not allowed inside `@group` block"""
-
-
-class JUNK_AFTER_CLOSE_BRACE(UserError):
-    """closing brace must be on a line by itself"""
-
-
-class NON_DIRECTIVE_OUTSIDE_CHUNK(UserError):
-    """non-directive lines must be inside `@group` blocks"""
 
 
 class DUPLICATE_CHUNK_LOCATION(MappingError):
@@ -76,152 +65,141 @@ def _resolve_labels(line, label_lookup):
     ]
 
 
+class _DummyGroup:
+    """A fake group that works only if the chunk is empty, producing b''."""
+
+
+    def __init__(self, name):
+        self._name = name
+
+
+    def parse(self, tokens, count, previous):
+        raise UNSUPPORTED_GROUP(name=self._name)
+
+
+    def parse_end(self, count):
+        assert count == 0 # otherwise parse() should already have raised.
+        return b''
+
+
 class Chunk:
-    def __init__(self, location, filters, group):
-        self.location = location
-        self.filters = filters
-        self.group = group
-        self.lines = []
-        self.size = group.terminator_size
+    def __init__(self):
+        self._location = None
+        self._filters = []
+        self._group = None
+        self._chunk_name = None
+        self._lines = []
+        self._labels = [] # (name, position) assuming unfiltered.
+        # TODO: ensure filters won't corrupt label info.
+        self._offset = 0
 
 
-    def add_line(self, tokens):
-        self.lines.append(tokens)
-        self.size += self.group.struct_size(tokens[0][0])
+    @property
+    def labels(self):
+        return self._chunk_name, self._location, tuple(self._labels)
+
+
+    def _add_filter_or_label(self, first, rest):
+        if self._group is None:
+            # Before the group identifier, single-@ lines are for filters.
+            # TODO: create an actual Filter object.
+            self._filters.append((first, rest))
+        else:
+            # Afterward, they're group-internal labels.
+            LABEL_PARAMS.require(not params)
+            self._labels.append((name, self._location + self._offset))
+
+
+    def _set_group(self, group, params):
+        UNCLOSED_CHUNK.require(self._group is None)
+        self._group = group
+        name, location = BAD_GROUP_LINE.pad(params, 2, 2)
+        self._chunk_name = BAD_CHUNK_NAME.singleton(name)
+        self._location = integer(location)
+
+
+    def _add_struct(self, first, rest):
+        STRUCT_OUTSIDE_CHUNK.require(self._group is not None)
+        self._lines.append(((first,), *rest))
+        self._offset += self._group.struct_size(first)
+
+
+    def add_line(self, group_lookup, ats, first, rest):
+        # Return whether this is the last line of a group.
+        if ats == 2:
+            if not first:
+                NO_CHUNK_DEFINITION.require(self._group is not None)
+                return True
+            group = group_lookup.get(first, None)
+            if group is None:
+                trace(f"Warning: unrecognized group name {first}. This will cause an error later if the group is not empty.")
+                group = _DummyGroup(first)
+            self._set_group(group, rest)
+        elif ats == 1:
+            self._add_filter_or_label(first, rest)
+        elif ats == 0:
+            self._add_struct(first, rest)
+        else:
+            raise TOO_MANY_ATS
+        return False
 
 
     def complete(self, label_lookup):
         previous = None
         result = bytearray()
-        for i, line in enumerate(self.lines):
-            previous, data = self.group.parse(
+        for i, line in enumerate(self._lines):
+            previous, data = self._group.parse(
                 _resolve_labels(line, label_lookup), i, previous
             )
             result.extend(data)
-        result.extend(self.group.parse_end(len(self.lines)))
-        for f in reversed(self.filters):
-            pass # TODO
-        return self.location, bytes(result)
+        result.extend(self._group.parse_end(len(self._lines)))
+        for f in reversed(self._filters):
+            pass # TODO: apply the filters.
+        return self._location, bytes(result)
 
 
-class SourceAccumulator:
-    def __init__(self):
-        self._chunks = []
-        self._chunk_open = False # whether we are in the middle of a chunk.
-        self._labels = {}
-        self._last_position = None
-
-
-    @property
-    def closed(self):
-        return not self._chunk_open
-
-
-    def add_line(self, tokens):
-        assert self._chunks and not self.closed # should be maintained outside
-        self._chunks[-1].add_line(tokens)
-
-
-    def add_label(self, name, position):
-        self._last_position = position
-        self._labels[name] = position
-
-
-    def start_chunk(self, filters, group):
-        assert self.closed # should have been caught earlier.
-        self._chunks.append(Chunk(self._last_position, filters, group))
-        self._chunk_open = True
-
-
-    def finish_chunk(self):
-        assert self._chunks and not self.closed # should be maintained outside
-        # Estimate position after the chunk.
-        # This will *normally* give the correct value, but some
-        # filters could conceivably mess it up.
-        if self._last_position is not None:
-            self._last_position += self._chunks[-1].size
-        self._chunk_open = False
+def _process_ats(tokens):
+    assert tokens # empty lines were preprocessed out.
+    first, *rest = tokens
+    # TODO: revisit this if/when implicit struct names
+    # are implemented for single-struct groups.
+    first = BAD_LINE_START.singleton(first)
+    size = len(first)
+    first = first.lstrip('@')
+    count = size - len(first)
+    return count, first, rest
 
 
 class SourceLoader:
     def __init__(self, structgroups):
-        self.filter_stack = []
-        self.all_groups = structgroups
-        # Factor out most of the internal state.
-        self._accumulator = SourceAccumulator()
+        self._chunks = []
+        self._current = None # either None or the last of the self._chunks.
+        self._all_groups = structgroups
 
 
-    def _dispatch(self, first, rest):
-        UNRECOGNIZED_DIRECTIVE.get(
-            {
-                'label': self._process_label,
-                'filter': self._process_filter,
-                'group': self._process_group
-            },
-            first
-        )(rest)
-
-
-    def _process_label(self, tokens):
-        name, position = INVALID_LABEL.pad(tokens, 1, 2)
-        self._accumulator.add_label(
-            INVALID_LABEL_NAME.singleton(name),
-            INVALID_LABEL_POSITION.convert(UserError, integer, position)
-        )
-
-
-    def _verify_brace(self, tokens, dname):
-        MISSING_BRACE.require(bool(tokens), directive=dname)
-        *args, brace = tokens
-        MISSING_BRACE.require(brace == ['{'], directive=dname)
-        return args
-
-
-    def _process_filter(self, tokens):
-        # TODO actually create some kind of Filter object.
-        self.filter_stack.append(self._verify_brace(tokens, 'filter'))
-
-
-    def _process_group(self, tokens):
-        tokens = self._verify_brace(tokens, 'group')
-        tokens = GROUPNAME_SINGLE.singleton(tokens) # single token...
-        tokens = GROUPNAME_SINGLE.singleton(tokens) # with a single part
-        self._accumulator.start_chunk(
-            self.filter_stack.copy(),
-            UNRECOGNIZED_GROUP_NAME.get(self.all_groups, tokens)
-        )
-
-
-    def _close_directive(self):
-        if self._accumulator.closed:
-            # then the brace must be closing a filter.
-            UNMATCHED_BRACE.convert(IndexError, self.filter_stack.pop)
-        else:
-            self._accumulator.finish_chunk()
+    def _get_labels(self):
+        labels = {}
+        for chunk in self._chunks:
+            name, location, internal = chunk.labels
+            # TODO: process internal labels.
+            labels[name] = location
+        return labels
 
 
     def line(self, indent, tokens):
         # Indentation is irrelevant.
-        assert tokens # empty lines were preprocessed out.
-        first, *rest = tokens
-        # FIXME: relax this restriction if/when implicit struct names
-        # are implemented for single-struct groups.
-        first = BAD_LINE_START.singleton(first)
-        if first.startswith('@'):
-            DIRECTIVE_INSIDE_CHUNK.require(self._accumulator.closed)
-            self._dispatch(first[1:], rest)
-        elif first == '}':
-            JUNK_AFTER_CLOSE_BRACE.require(not rest)
-            self._close_directive()
-        else:
-            NON_DIRECTIVE_OUTSIDE_CHUNK.require(not self._accumulator.closed)
-            self._accumulator.add_line(tokens)
+        count, first, rest = _process_ats(tokens)
+        if self._current is None:
+            self._current = Chunk()
+            self._chunks.append(self._current)
+        if self._current.add_line(self._all_groups, count, first, rest):
+            self._current = None
 
 
     def result(self):
-        UNMATCHED_BRACE.require(self._accumulator.closed)
         processed = {}
-        for chunk in self._accumulator._chunks:
-            key, value = chunk.complete(self._accumulator._labels)
+        label_lookup = self._get_labels()
+        for chunk in self._chunks:
+            key, value = chunk.complete(label_lookup)
             DUPLICATE_CHUNK_LOCATION.add_unique(processed, key, value)
         return processed

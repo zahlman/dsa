@@ -69,15 +69,18 @@ class _Chunk:
 
 
     def write_to(self, outfile, location):
-        outfile.write(f'@label {wrap_multiword(self._label)} 0x{location:X}\n')
+        label = wrap_multiword(self._label)
+        write = outfile.write
         if self._loaded:
-            outfile.write(f'@filter size {self._size} {{\n')
-            outfile.write(f'@group {self._group_name} {{\n')
-            for line in self._lines:
-                outfile.write(f'{line}\n')
-            outfile.write('}\n')
-            outfile.write(f'}} # end:0x{location+self._size:X}\n')
-        outfile.write('\n')
+            # Only add a size filter if the group was recognized.
+            write(f'@size {self._size}\n')
+        write(f'@@{self._group_name} {label} 0x{location:X}\n')
+        for line in self._lines:
+            write(f'{line}\n')
+        if self._loaded:
+            write(f'@@ #0x{location+self._size:X}\n\n')
+        else:
+            write('@@\n\n')
 
 
 class _ChunkRegistry:
