@@ -99,11 +99,10 @@ class Chunk:
         return self._chunk_name, self._location, tuple(self._labels)
 
 
-    def _add_filter_or_label(self, make_filter, first, rest):
+    def _add_filter_or_label(self, first, rest):
         if self._group is None:
             # Before the group identifier, single-@ lines are for filters.
-            # TODO: create an actual Filter object.
-            self._filters.append(make_filter(first, rest))
+            self._filters.append((first, rest))
         else:
             # Afterward, they're group-internal labels.
             LABEL_PARAMS.require(not params)
@@ -124,7 +123,7 @@ class Chunk:
         self._offset += self._group.struct_size(first)
 
 
-    def add_line(self, group_lookup, make_filter, ats, first, rest):
+    def add_line(self, group_lookup, ats, first, rest):
         # Return whether this is the last line of a group.
         if ats == 2:
             if not first:
@@ -136,7 +135,7 @@ class Chunk:
                 group = _DummyGroup(first)
             self._set_group(group, rest)
         elif ats == 1:
-            self._add_filter_or_label(make_filter, first, rest)
+            self._add_filter_or_label(first, rest)
         elif ats == 0:
             self._add_struct(first, rest)
         else:
@@ -144,7 +143,7 @@ class Chunk:
         return False
 
 
-    def complete(self, label_lookup):
+    def complete(self, pack, label_lookup):
         previous = None
         result = bytearray()
         for i, line in enumerate(self._lines):
@@ -153,8 +152,8 @@ class Chunk:
             )
             result.extend(data)
         result.extend(self._group.parse_end(len(self._lines)))
-        for f in reversed(self._filters):
-            pass # TODO: apply the filters.
+        for name, params in reversed(self._filters):
+            result = pack(result, name, params)
         return self._location, bytes(result)
 
 
@@ -171,11 +170,11 @@ def _process_ats(tokens):
 
 
 class SourceLoader:
-    def __init__(self, structgroups, make_filter):
+    def __init__(self, structgroups, filters):
         self._chunks = []
         self._current = None # either None or the last of the self._chunks.
         self._group_lookup = structgroups
-        self._make_filter = make_filter
+        self._pack = filters.pack
 
 
     def _get_labels(self):
@@ -193,10 +192,7 @@ class SourceLoader:
         if self._current is None:
             self._current = Chunk()
             self._chunks.append(self._current)
-        if self._current.add_line(
-            self._group_lookup, self._make_filter,
-            count, first, rest
-        ):
+        if self._current.add_line(self._group_lookup, count, first, rest):
             self._current = None
 
 
@@ -204,6 +200,6 @@ class SourceLoader:
         processed = {}
         label_lookup = self._get_labels()
         for chunk in self._chunks:
-            key, value = chunk.complete(label_lookup)
+            key, value = chunk.complete(self._pack, label_lookup)
             DUPLICATE_CHUNK_LOCATION.add_unique(processed, key, value)
         return processed

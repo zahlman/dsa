@@ -18,7 +18,7 @@ class UserError(ValueError):
         try:
             return action(*args, **kwargs)
         except exctype as e:
-            raise cls() from e
+            raise cls(reason=str(e)) from e
 
 
 class SequenceError(UserError):

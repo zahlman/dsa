@@ -1,4 +1,4 @@
-from ..filters import filter_library
+from ..filters import FilterLibrary
 from ..parsing.file_parsing import load_files, load_files_tagged, load_lines
 from ..parsing.path_loader import PathLoader
 from ..parsing.structgroup_loader import StructGroupLoader
@@ -39,7 +39,7 @@ def _load_paths(pathfile):
 
 @timed('Loading filters...')
 def _load_filters(paths):
-    return filter_library(paths['filters'])
+    return FilterLibrary(paths['filters'])
 
 
 @timed('Loading types...')
