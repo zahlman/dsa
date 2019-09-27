@@ -99,11 +99,11 @@ class Chunk:
         return self._chunk_name, self._location, tuple(self._labels)
 
 
-    def _add_filter_or_label(self, first, rest):
+    def _add_filter_or_label(self, make_filter, first, rest):
         if self._group is None:
             # Before the group identifier, single-@ lines are for filters.
             # TODO: create an actual Filter object.
-            self._filters.append((first, rest))
+            self._filters.append(make_filter(first, rest))
         else:
             # Afterward, they're group-internal labels.
             LABEL_PARAMS.require(not params)
@@ -124,7 +124,7 @@ class Chunk:
         self._offset += self._group.struct_size(first)
 
 
-    def add_line(self, group_lookup, ats, first, rest):
+    def add_line(self, group_lookup, make_filter, ats, first, rest):
         # Return whether this is the last line of a group.
         if ats == 2:
             if not first:
@@ -136,7 +136,7 @@ class Chunk:
                 group = _DummyGroup(first)
             self._set_group(group, rest)
         elif ats == 1:
-            self._add_filter_or_label(first, rest)
+            self._add_filter_or_label(make_filter, first, rest)
         elif ats == 0:
             self._add_struct(first, rest)
         else:
@@ -171,10 +171,11 @@ def _process_ats(tokens):
 
 
 class SourceLoader:
-    def __init__(self, structgroups):
+    def __init__(self, structgroups, make_filter):
         self._chunks = []
         self._current = None # either None or the last of the self._chunks.
-        self._all_groups = structgroups
+        self._group_lookup = structgroups
+        self._make_filter = make_filter
 
 
     def _get_labels(self):
@@ -192,7 +193,10 @@ class SourceLoader:
         if self._current is None:
             self._current = Chunk()
             self._chunks.append(self._current)
-        if self._current.add_line(self._all_groups, count, first, rest):
+        if self._current.add_line(
+            self._group_lookup, self._make_filter,
+            count, first, rest
+        ):
             self._current = None
 
 

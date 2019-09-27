@@ -1,3 +1,4 @@
+from ..filters import filter_library
 from ..parsing.file_parsing import load_files, load_files_tagged, load_lines
 from ..parsing.path_loader import PathLoader
 from ..parsing.structgroup_loader import StructGroupLoader
@@ -20,6 +21,8 @@ _DEFAULT_PATHS = [
     'types types',
     '    **',
     'structgroups structgroups',
+    '    **',
+    'filters filters',
     '    **'
 ]
 
@@ -32,6 +35,11 @@ def _load_paths(pathfile):
         if pathfile is None
         else load_files([pathfile], PathLoader, root, folder(pathfile))
     )
+
+
+@timed('Loading filters...')
+def _load_filters(paths):
+    return filter_library(paths['filters'])
 
 
 @timed('Loading types...')
@@ -47,4 +55,6 @@ def _load_structgroups(types, paths):
 @timed('Loading language...')
 def load_language(pathfile):
     paths = _load_paths(pathfile)
-    return _load_structgroups(_load_types(paths), paths)
+    groups = _load_structgroups(_load_types(paths), paths)
+    filters = _load_filters(paths)
+    return groups, filters

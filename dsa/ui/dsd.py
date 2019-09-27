@@ -9,8 +9,8 @@ from .tracing import timed, trace
 
 
 @timed('Disassembling...')
-def _disassemble(language, group_name, position, data, output):
-    Disassembler(language, group_name, position)(data, output)
+def _disassemble(groups, group_name, filters, position, data, output):
+    Disassembler(groups, group_name, filters, position)(data, output)
 
 
 @param('output', 'output file name')
@@ -21,11 +21,11 @@ def _disassemble(language, group_name, position, data, output):
 @entry_point('Data Structure Assembler - disassembly mode')
 def dsd(binary, root, output, paths, verify=False):
     data = get_data(binary)
-    language = load_language(paths)
+    groups, filters = load_language(paths)
     group_name, _, position = root.partition(':')
     position = int(position, 0)
-    _disassemble(language, group_name, position, data, output)
+    _disassemble(groups, group_name, filters, position, data, output)
     if verify:
-        result = reassemble(binary, output, language)
+        result = reassemble(binary, output, groups, filters)
         status = 'OK' if result == data else 'failed'
         trace(f'Verification: {status}.')

@@ -135,9 +135,11 @@ class _ChunkRegistry:
 
 
 class Disassembler:
-    def __init__(self, group_lookup, group_name, location):
+    def __init__(self, group_lookup, group_name, filter_lookup, location):
         self._registry = _ChunkRegistry(group_name, location)
         self._group_lookup = group_lookup
+        # FIXME: Filters are ignored for now when disassembling.
+        self._filter_lookup = filter_lookup
 
 
     def __call__(self, source, outfilename):

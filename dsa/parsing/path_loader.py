@@ -30,7 +30,11 @@ class FLOATING_MODULE(UserError):
     """module path outside of `types`/`structs` block"""
 
 
-_PATH_TYPES = ('types', 'structgroups')
+_PATH_TYPES = {
+    'types': 'txt',
+    'structgroups': 'txt',
+    'filters': 'py'
+}
 
 
 class PathLoader(SimpleLoader):
@@ -39,12 +43,12 @@ class PathLoader(SimpleLoader):
         self._kind = None
         self._system_root = system_root
         self._config_root = config_root
-        self._accumulator = {k: set() for k in _PATH_TYPES}
+        self._accumulator = {k: set() for k in _PATH_TYPES.keys()}
 
 
     def unindented(self, tokens):
         kind, root = JUNK_ROOT.pad(tokens, 1, 2)
-        kind = one_of(*_PATH_TYPES)(kind)
+        kind = one_of(*_PATH_TYPES.keys())(kind)
         root = JUNK_ROOT.singleton(root)
         if root is None:
             root = os.path.join(self._system_root, kind)
@@ -63,12 +67,13 @@ class PathLoader(SimpleLoader):
         ]
         INNER_STAR.require('*' not in parts)
         INNER_DOUBLE_STAR.require('**' not in parts)
+        ext = _PATH_TYPES[self._kind]
         if last == '*':
-            last = ['*.txt']
+            last = [f'*.{ext}']
         elif last == '**':
-            last = ['**', '*.txt']
+            last = ['**', f'*.{ext}']
         else:
-            last = [f'{last}.txt']
+            last = [f'{last}.{ext}']
         pattern = os.path.join(self._root, *parts, *last)
         for path in glob(pattern, recursive=True):
             pathdict.add(os.path.realpath(path))

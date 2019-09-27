@@ -11,8 +11,8 @@ from functools import partial
 
 # two different diagnostic messages for this,
 # so the decoration is invoked dynamically.
-def _assemble(verbose, infilename, outfilename, language):
-    chunks = load_files([outfilename], SourceLoader, language)
+def _assemble(verbose, infilename, outfilename, groups, filters):
+    chunks = load_files([outfilename], SourceLoader, groups, filters)
     with open(infilename, 'rb') as f:
         data = bytearray(f.read())
     for position, chunk in chunks.items():
@@ -39,6 +39,6 @@ def _do_output(to_write, binary):
 @entry_point('Data Structure Assembler - assembly mode')
 def dsa(binary, source, paths, output=None):
     data = get_data(binary)
-    language = load_language(paths)
-    result = assemble(binary, source, language)
+    groups, filters = load_language(paths)
+    result = assemble(binary, source, groups, filters)
     _do_output(result, binary if output is None else output)
