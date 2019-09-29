@@ -24,7 +24,7 @@ class TokenError(UserError):
         if token is None:
             return None # handle placeholders from pad()
         if len(token) != 1:
-            raise cls(**kwargs)
+            raise cls(actual=len(token), **kwargs)
         return token[0]
 
 
@@ -32,6 +32,18 @@ class LineError(UserError):
     def __init__(self, **kwargs):
         space = ' ' * kwargs['position']
         super().__init__(space=space, **kwargs)
+
+
+class TupleError(UserError):
+    # Used either to take a token from the front of a line
+    # or a token part from the front of a token.
+    @classmethod
+    def shift(cls, tokens, **kwargs):
+        try:
+            first, *rest = tokens
+            return first, rest
+        except ValueError:
+            raise cls(**kwargs)
 
 
 class UNMATCHED_BRACKET(LineError):
