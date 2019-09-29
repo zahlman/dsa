@@ -57,8 +57,7 @@ class _Chunk:
         group.check_alignment(start)
         tag = f'Structgroup {group_name} (chunk starting at 0x{start:X})'
         data = self._match_data(group, tag, source, start)
-        for thing in data:
-            struct_name, match, referents, position = thing
+        for struct_name, match, referents, position in data:
             for referent in referents:
                 registry.register(*referent)
             self._lines.extend(format_line(group.format(
