@@ -1,17 +1,17 @@
 type Byte
-    8:value
+    8 value
 
 type Sbyte
-    8:value signed
+    8 value signed
 
 type Pair
-    16:value
+    16 value
 
 type Spair
-    16:value signed
+    16 value signed
 
 type Quad
-    32:value
+    32 value
 
 type Squad
-    32:value signed
+    32 value signed

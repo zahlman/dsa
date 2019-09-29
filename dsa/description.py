@@ -28,13 +28,25 @@ class DUPLICATE_FLAG(UserError):
     """duplicate flag names not allowed"""
 
 
+class EMPTY_RANGE(TokenError):
+    """invalid range"""
+
+
 class INVALID_RANGE(TokenError):
     """invalid range (token should have 1..2 parts, has {actual})"""
+
+
+class INVALID_STRIDE(TokenError):
+    """invalid range (stride must be positive)"""
 
 
 class SINGLE_TOKEN_REQUIRED(UserError):
     """{thing} must be a single, single-part token
     (use `[]` to group multiple words; `,` and `:` are not allowed)"""
+
+
+class BAD_DESCRIPTION_HEADER(UserError):
+    """extra data not allowed in `enum` or `flags` header"""
 
 
 def _within(low, value, high):
@@ -48,6 +60,10 @@ def _within(low, value, high):
 class UnlabelledRange:
     def __init__(self, low, high):
         self.low, self.high = low, high
+
+
+    def pointer_value(self, value):
+        return value if _within(self.low, value, self.high) else None
 
 
     def format(self, value, convert):
@@ -74,7 +90,16 @@ class LabelledRange:
             else high if high is not None
             else 0
         )
-        self.definite = (low == high == self.baseline)
+
+
+    @property
+    def definite(self):
+        return self.low == self.high and self.low is not None
+
+
+    def pointer_value(self, value):
+        # A pointer is valid only if the enum would not label it.
+        return None
 
 
     def format(self, value, convert):
@@ -86,7 +111,7 @@ class LabelledRange:
 
 
     def _convert_offset(self, param):
-        if self.low == self.high:
+        if self.definite:
             FORBIDDEN_PARAMETER.require(param is None)
             return 0
         else:
@@ -114,6 +139,13 @@ class EnumDescription:
         ]
 
 
+    def pointer_value(self, value):
+        return FORMAT_FAILED.first_not_none(
+            (r.pointer_value(value) for r in self.ranges),
+            value=value
+        )
+
+
     def format(self, value, numeric_formatter):
         return FORMAT_FAILED.first_not_none(
             (r.format(value, numeric_formatter) for r in self.ranges),
@@ -134,6 +166,11 @@ _flag_splitter = token_splitter('|')
 class FlagsDescription:
     def __init__(self, names):
         self.names = names
+
+
+    def pointer_value(self, value):
+        raise Exception # FIXME
+        # a Pointer should only be allowed to have an EnumDescription.
 
 
     def format(self, value, numeric_formatter):
@@ -165,25 +202,39 @@ class RawDescription:
         pass
 
 
+    def pointer_value(self, value):
+        return value
+
+
     def format(self, value, numeric_formatter):
         return numeric_formatter(value)
 
 
     def parse(self, text):
-        return int(text, 0)
+        return parse_int(text)
 
 
 Raw = RawDescription()
 
 
 def _parse_range(token):
-    low, high = INVALID_RANGE.pad(token, 1, 2)
-    if high is None:
-        high = low
-    return (
-        parse_optional_int(low, 'low end of range'),
-        parse_optional_int(high, 'high end of range')
-    )
+    parts = len(token)
+    # Empty parts of the token will be converted to None here,
+    # which will allow arbitrarily low/high values as appropriate.
+    if parts == 1:
+        low, high, stride = token[0], token[0], '1'
+        EMPTY_RANGE.require(bool(low)) # could fail if the input is `[]`
+    elif parts == 2:
+        low, high, stride = token[0], token[1], '1'
+    elif parts == 3:
+        low, high, stride = token
+    else:
+        raise INVALID_RANGE(actual=parts)
+    low = parse_optional_int(low, 'low end of range')
+    high = parse_optional_int(high, 'high end of range')
+    stride = parse_int(stride, 'stride of range')
+    INVALID_STRIDE.require(stride > 0)
+    return low, high, stride
 
 
 def _get_single(token, thing):
@@ -194,13 +245,15 @@ def _get_single(token, thing):
 
 class EnumDescriptionLoader:
     """Helper used by TypeDescriptionLoader."""
-    def __init__(self):
+    def __init__(self, tokens):
+        BAD_DESCRIPTION_HEADER.require(not tokens)
         self.ranges = []
 
 
     def add_line(self, line_tokens):
         values, *label = line_tokens
-        low, high = _parse_range(values)
+        low, high, stride = _parse_range(values)
+        # FIXME: take `stride` into consideration
         label = _get_single(label, 'enum name') if label else None
         self.ranges.append((low, high, label))
 
@@ -211,7 +264,8 @@ class EnumDescriptionLoader:
 
 class FlagsDescriptionLoader:
     """Helper used by TypeDescriptionLoader."""
-    def __init__(self):
+    def __init__(self, tokens):
+        BAD_DESCRIPTION_HEADER.require(not tokens)
         self.names = []
 
 

@@ -1,6 +1,6 @@
 from ..description import EnumDescriptionLoader, FlagsDescriptionLoader
 from ..errors import MappingError, UserError
-from ..member import MemberLoader
+from ..member import ValueLoader, PointerLoader
 from .file_parsing import SimpleLoader
 from .line_parsing import TokenError
 
@@ -47,16 +47,19 @@ class TypeLoader(SimpleLoader):
             {
                 'flags': (FlagsDescriptionLoader, self._descriptions),
                 'enum': (EnumDescriptionLoader, self._descriptions),
-                'type': (MemberLoader, self._members)
+                'type': (ValueLoader, self._members),
+                'pointer': (PointerLoader, self._members)
             }, section_type
         )
 
 
     def _parse_section_header(self, tokens):
-        section_type, name = INVALID_SECTION_HEADER.pad(tokens, 2, 2)
+        INVALID_SECTION_HEADER.require(len(tokens) >= 2)
+        section_type, name, *flags = tokens
         return (
             INVALID_SECTION_TYPE.singleton(section_type),
-            INVALID_NAME.singleton(name, thing=section_type)
+            INVALID_NAME.singleton(name, thing=section_type),
+            flags
         )
 
 
@@ -66,9 +69,9 @@ class TypeLoader(SimpleLoader):
 
 
     def unindented(self, tokens):
-        section_type, name = self._parse_section_header(tokens)
+        section_type, name, flags = self._parse_section_header(tokens)
         cls, storage = self._categorize(section_type)
-        self._current_datum = cls()
+        self._current_datum = cls(flags)
         DUPLICATE_SECTION.add_unique(
             storage, name, self._current_datum, section_type=section_type
         )

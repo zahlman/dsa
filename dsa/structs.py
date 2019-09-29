@@ -3,6 +3,10 @@ from .parsing.line_parsing import TokenError
 import re
 
 
+class UNKNOWN_GROUP(errors.MappingError):
+    """attempting to follow pointer to unknown group `{key}`"""
+
+
 class UNRECOGNIZED_FOLLOWERS(errors.UserError):
     """unrecognized followers `{extra}` for struct `{current}`"""
 
@@ -44,77 +48,135 @@ class INVALID_FOLLOWER(errors.UserError):
     """struct `{name}` invalid here (valid options: {followers})"""
 
 
-class Struct:
-    def __init__(self, member_data, alignment):
-        pattern = bytearray()
-        # The template value is "write-only"; the non-fixed bytes of the
-        # bytearray will be replaced each time and are meaningless except
-        # when a copy is made by `parse`.
-        self.template = bytearray()
-        offsets = []
-        members = []
-        names = []
-        position = 0
-        for member, name, fixed in member_data:
-            size = member.size
-            if fixed is None:
-                offsets.append(position)
-                members.append(member)
-                names.append(name)
-                pattern.extend(b'(' + (b'.' * size) + b')')
-                self.template.extend(bytes(size))
-            else:
-                assert len(fixed) == size
-                pattern.extend(re.escape(fixed))
-                self.template.extend(fixed)
-            position += size
-        assert position == len(self.template)
-        padding = -position % alignment
-        pattern.extend(b'.' * padding)
-        self.template.extend(bytes(padding))
-        self.pattern = re.compile(bytes(pattern), re.DOTALL)
-        self.offsets = tuple(offsets)
-        self.members = tuple(members)
-        self.names = tuple(names)
+class Member:
+    # Item in a Struct that delegates to either a Value or Pointer
+    # for parsing and formatting.
+    def __init__(self, implementation, name, ref_name, offset):
+        self._implementation = implementation # Value or Pointer
+        self._name = name
+        self._ref_name = ref_name # name of group at the pointed-at location.
+        self._offset = offset # byte offset relative to the containing Struct.
+
+
+    @property
+    def offset(self):
+        return self._offset # read-only
 
 
     @property
     def size(self):
-        return len(self.template)
+        return self._implementation.size
+
+
+    @property
+    def pattern(self):
+        return b'(' + (b'.' * self.size) + b')'
+
+
+    @property
+    def template(self):
+        return bytes(self.size)
+
+
+    @property
+    def tag(self):
+        typename = self._implementation.typename
+        name = self._name
+        return f'Member `{name}` (of type `{typename}`)'
+
+
+    def referent(self, source, position):
+        start = position + self._offset
+        raw = source[start:start+self._implementation.size]
+        target = self._implementation.pointer_value(raw)
+        if target is None:
+            return None # _implementation was a Value.
+        # Assumed to point at something even if that something isn't named.
+        return self._ref_name, target, self._name
+
+
+    def format(self, value, lookup):
+        return errors.wrap(
+            self.tag, self._implementation.format, value, lookup
+        )
+
+
+    def parse(self, items):
+        return errors.wrap(
+            self.tag, self._implementation.parse, items
+        )
+
+
+def _process_member_data(member_data, alignment):
+    pattern = bytearray()
+    # The template value is "write-only"; the non-fixed bytes of the
+    # bytearray will be replaced each time and are meaningless except
+    # when a copy is made by `parse`.
+    template = bytearray()
+    members = []
+    position = 0
+    for implementation, name, fixed, ref_name in member_data:
+        if fixed is None:
+            member = Member(implementation, name, ref_name, len(template))
+            members.append(member)
+            pattern.extend(member.pattern)
+            template.extend(member.template)
+        else:
+            assert len(fixed) == implementation.size
+            pattern.extend(re.escape(fixed))
+            template.extend(fixed)
+    padding = -len(template) % alignment
+    pattern.extend(b'.' * padding)
+    template.extend(bytes(padding))
+    return re.compile(bytes(pattern), re.DOTALL), template, tuple(members)
+
+
+class Struct:
+    def __init__(self, member_data, alignment):
+        self._pattern, self._template, self._members = _process_member_data(
+            member_data, alignment
+        )
+
+
+    @property
+    def size(self):
+        return len(self._template)
 
 
     def _match_handlers(self, match):
-        return zip(self.members, self.names, match.groups())
+        return zip(self._members, match.groups())
+
+
+    def _referents(self, source, position):
+        for member in self._members:
+            candidate = member.referent(source, position)
+            if candidate is not None:
+                yield candidate
 
 
     def extract(self, name, source, position):
-        match = self.pattern.match(source, position)
-        return None if match is None else (
-            name, match, [
-                referent
-                for member, name, value in self._match_handlers(match)
-                for referent in member.referents(name, value)
-            ], self.size
-        )
+        match = self._pattern.match(source, position)
+        if match is None:
+            return None
+        return name, match, tuple(self._referents(source, position)), self.size
 
 
     def format(self, match, lookup):
         return tuple(
-            member.format(name, value, lookup)
-            for member, name, value in self._match_handlers(match)
+            member.format(value, lookup)
+            for member, value in self._match_handlers(match)
         )
 
 
     def parse(self, tokens):
         # This invariant should be upheld by the struct lookup/dispatch.
-        assert len(tokens) == len(self.members)
-        for member, name, token, offset in zip(
-            self.members, self.names, tokens, self.offsets
-        ):
-            raw = member.parse(name, token)
+        assert len(tokens) == len(self._members)
+        for member, token in zip(self._members, tokens):
+            raw = member.parse(token)
+            offset = member.offset
             assert len(raw) == member.size
-            self.template[offset:offset+len(raw)] = raw
-        return bytes(self.template)
+            self._template[offset:offset+len(raw)] = raw
+        return bytes(self._template)
 
 
 def _normalized_graph(graph, first):
@@ -200,6 +262,7 @@ class StructGroup:
         if not candidates:
             return None
         # name, match, referents, size
+        # referents is a list of (group name, location, label_base) tuples
         return NO_MATCH.first_not_none((
             self.structs[name].extract(name, source, position)
             for name in candidates

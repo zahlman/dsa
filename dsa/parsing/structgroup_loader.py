@@ -1,7 +1,7 @@
 from ..errors import MappingError, UserError
 from ..structs import Struct, StructGroup
 from .file_parsing import SimpleLoader
-from .line_parsing import arguments, boolean, hexdump, one_of, positive_integer, TokenError
+from .line_parsing import arguments, boolean, hexdump, one_of, positive_integer, TupleError, TokenError
 from collections import OrderedDict
 
 
@@ -13,20 +13,25 @@ class NEXT_LAST_CONFLICT(UserError):
     """`next` and `last` options are mutually exclusive"""
 
 
-class INVALID_TNF(UserError):
-    """invalid typename/name/fixed data"""
+class BAD_MEMBER(TupleError):
+    """not enough or too many tokens for member specification"""
+
+
+class INVALID_TF(TupleError):
+    # Should be impossible?
+    """invalid typename/fixed data"""
+
+
+class BAD_REFERENT(TupleError):
+    """invalid specification for pointer referent"""
 
 
 class UNRECOGNIZED_TYPE(MappingError):
     """unrecognized type {key}"""
 
 
-class NOT_FIXED_OR_NAMED(UserError):
+class NOT_FIXED_OR_NAMED(TupleError):
     """member must have either a name or a fixed value"""
-
-
-class FIXED_AND_NAMED(UserError):
-    """member with fixed value may not be named"""
 
 
 class DUPLICATE_STRUCT(MappingError):
@@ -95,21 +100,27 @@ class StructData:
         return Struct(self._data, self._alignment)
 
 
-    def add_member(self, line_tokens, types):
-        tnf, *options = line_tokens
-        # Any parts after the second are interpreted as a fixed-value token.
-        try:
-            typename, name, *fixed = tnf
-        except ValueError:
-            raise INVALID_TNF
+    def add_member(self, tokens, types):
+        typename, tokens = BAD_MEMBER.shift(tokens)
+        typename, fixed = INVALID_TF.shift(typename)
         member = UNRECOGNIZED_TYPE.get(types, typename)
-        if not fixed:
-            NOT_FIXED_OR_NAMED.require(name != '')
-            fixed = None # normalize for later use
+        ref_name = None
+        if not fixed: # should be an empty list
+            fixed = None # normalize
+            name, tokens = NOT_FIXED_OR_NAMED.shift(tokens)
+            name = INVALID_STRUCT_NAME.singleton(name)
+            if tokens:
+                ref_token, tokens = BAD_MEMBER.shift(tokens)
+                BAD_MEMBER.require(not tokens)
+                tag, ref_name = BAD_REFERENT.shift(ref_token)
+                ref_name, junk = BAD_REFERENT.shift(ref_name)
+                BAD_REFERENT.require(not junk)
+                BAD_REFERENT.require(tag == 'referent')
         else:
-            FIXED_AND_NAMED.require(name == '')
-            fixed = member.parse(name, fixed)
-        self._data.append((member, name, fixed))
+            BAD_MEMBER.require(not tokens)
+            name = None
+            fixed = member.parse(fixed)
+        self._data.append((member, name, fixed, ref_name))
 
 
 class StructGroupLoader(SimpleLoader):

@@ -1,23 +1,26 @@
 from .description import Raw
 from .errors import parse_int, MappingError, UserError
-from .parsing.line_parsing import arguments, base, boolean, integer, string, TokenError
-from functools import partial
+from .parsing.line_parsing import arguments, base, boolean, integer, string, TupleError, TokenError
 
 
 class UNALIGNED_POINTER(UserError):
     """cannot refer to this address (wrong alignment)"""
 
 
-class INVALID_BNF(TokenError):
-    """invalid bits/name/fixed data (token should have 1..3 parts, has {actual})"""
+class INVALID_LINE(TupleError):
+    """not enough tokens for field description line"""
+
+
+class INVALID_BF(TokenError):
+    """invalid bit size and/or fixed value (token should have 1..2 parts, has {actual})"""
+
+
+class INVALID_NAME(TokenError):
+    """field name must be single-part"""
 
 
 class MISSING_DESCRIPTION(MappingError):
     """unrecognized description name `{key}`"""
-
-
-class FIXED_REFERENT(UserError):
-    """fixed field may not have a referent"""
 
 
 class FieldTranslation:
@@ -64,13 +67,10 @@ class FieldTranslation:
 
 
 class Field:
-    def __init__(
-        self, translation, formatter, description, referent
-    ):
+    def __init__(self, translation, formatter, description):
         self.translation = translation
         self.formatter = formatter
         self.description = description
-        self.referent = referent
 
 
     @property
@@ -78,18 +78,18 @@ class Field:
         return self.translation.size
 
 
-    def referents(self, raw, name):
-        if self.referent is not None:
-            yield (self.referent, self.translation.value(raw), name)
+    def bias(self, raw):
+        return self.translation.value(raw)
 
 
-    def format(self, raw, lookup):
+    def pointer_value(self, raw):
         value = self.translation.value(raw)
-        return (
-            self.description.format(value, self.formatter)
-            if self.referent is None # not a pointer type
-            else lookup(value) # pointer
-        )
+        return self.description.pointer_value(value)
+
+
+    def format(self, raw):
+        value = self.translation.value(raw)
+        return self.description.format(value, self.formatter)
 
 
     def parse(self, text):
@@ -99,28 +99,36 @@ class Field:
         return result
 
 
-def make_field(line_tokens, description_lookup):
-    bnf, *flag_tokens = line_tokens
-    bits, name, fixed = INVALID_BNF.pad(bnf, 1, 3)
-    bits = parse_int(bits, 'bit count')
-    args = arguments(
-        flag_tokens,
-        {
-            # TODO: use `stride`.
-            'bias': (integer, 0), 'stride': (integer, 1),
-            'signed': (boolean, False), 'base': (base, hex),
-            'values': (string, None), 'referent': (string, None)
-        }
-    )
-    field = Field(
+def make_field(bits, args, description_lookup):
+    return Field(
         FieldTranslation(bits, args.bias, args.stride, args.signed),
         args.base,
         Raw if args.values is None else MISSING_DESCRIPTION.get(
             description_lookup, args.values
-        ),
-        args.referent
+        )
     )
-    if fixed is not None:
-        FIXED_REFERENT.require(args.referent is None)
-        fixed = field.parse(fixed)
-    return name, field, fixed, bits
+
+
+def field_arguments(tokens):
+    return arguments(
+        tokens,
+        {
+            'bias': (integer, 0), 'stride': (integer, 1),
+            'signed': (boolean, False), 'base': (base, hex),
+            'values': (string, None)
+        }
+    )
+
+
+def member_field_data(tokens):
+    bf, tokens = INVALID_LINE.shift(tokens)
+    bits, fixed = INVALID_BF.pad(bf, 1, 2)
+    bits = parse_int(bits, 'bit count')
+    if fixed is None:
+        name, tokens = INVALID_LINE.shift(tokens)
+        name = INVALID_NAME.singleton(name)
+    else:
+        name = None
+    args = field_arguments(tokens)
+    # A later pass will parse the `fixed` spec and create the Field.
+    return name, args, fixed, bits
