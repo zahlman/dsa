@@ -1,6 +1,4 @@
-from ..errors import parse_int, MappingError, UserError
-import binascii
-from functools import partial
+from ..errors import MappingError, UserError
 import re, textwrap
 
 
@@ -18,23 +16,6 @@ class TokenError(UserError):
         raise cls(actual=actual, **kwargs)
 
 
-    @classmethod
-    def singleton(cls, token, **kwargs):
-        """Helper to verify there is a single component."""
-        if token is None:
-            return None # handle placeholders from pad()
-        if len(token) != 1:
-            raise cls(actual=len(token), **kwargs)
-        return token[0]
-
-
-class LineError(UserError):
-    def __init__(self, **kwargs):
-        space = ' ' * kwargs['position']
-        super().__init__(space=space, **kwargs)
-
-
-class TupleError(UserError):
     # Used either to take a token from the front of a line
     # or a token part from the front of a token.
     @classmethod
@@ -44,6 +25,12 @@ class TupleError(UserError):
             return first, rest
         except ValueError:
             raise cls(**kwargs)
+
+
+class LineError(UserError):
+    def __init__(self, **kwargs):
+        space = ' ' * kwargs['position']
+        super().__init__(space=space, **kwargs)
 
 
 class UNMATCHED_BRACKET(LineError):
@@ -70,30 +57,6 @@ class UNRECOGNIZED_PARAMETER(MappingError):
 
 class MISSING_PARAMETERS(UserError):
     """missing required parameters `{missing}`"""
-
-
-class MUST_BE_SINGLE_ITEM(UserError):
-    """flag value must be a single item"""
-
-
-class ILLEGAL_VALUE(UserError):
-    """value must be one of {whitelist}"""
-
-
-class MUST_BE_POSITIVE(UserError):
-    """value cannot be negative or zero"""
-
-
-class INVALID_BOOLEAN(MappingError):
-    """invalid boolean `{key}` (must be `true` or `false`, case-insensitive)"""
-
-
-class INVALID_BASE(MappingError):
-    """invalid base setting `{key}` (allowed values: 2, 8, 10, 16)"""
-
-
-class INVALID_TERMINATOR(UserError):
-    """invalid terminator format"""
 
 
 def _normalize(token):
@@ -180,52 +143,9 @@ def arguments(tokens, parameters):
         name, *item = token
         DUPLICATE_PARAMETER.add_unique(
             specified, name,
-            UNRECOGNIZED_PARAMETER.get(converters, name)(item)
+            UNRECOGNIZED_PARAMETER.get(converters, name)(item, f'`{name}` parameter')
         )
     result.update(specified)
     missing = set(converters.keys()) - set(result.keys())
     MISSING_PARAMETERS.require(not missing, missing=missing)
     return Namespace(result)
-
-
-# "types" for flag values.
-def string(items):
-    MUST_BE_SINGLE_ITEM.require(len(items) == 1)
-    return items[0]
-
-
-def integer(items):
-    return parse_int(string(items))
-
-
-def _whitelisted_string(whitelist, items):
-    result = string(items)
-    ILLEGAL_VALUE.require(result in whitelist, whitelist=whitelist)
-    return result
-
-
-def one_of(*values):
-    return partial(_whitelisted_string, values)
-
-
-def positive_integer(items):
-    result = integer(items)
-    MUST_BE_POSITIVE.require(result > 0)
-    return result
-
-
-def boolean(items):
-    if not items:
-        return True # shortcut syntax
-    text = string(items)
-    return INVALID_BOOLEAN.get({'true': True, 'false': False}, text.lower())
-
-
-def base(items):
-    text = string(items)
-    return INVALID_BASE.get({'2': bin, '8': oct, '10': str, '16': hex}, text)
-
-
-def hexdump(items):
-    text = ''.join(string(items).split())
-    return INVALID_TERMINATOR.convert(binascii.Error, binascii.unhexlify, text)

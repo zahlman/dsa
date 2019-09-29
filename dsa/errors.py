@@ -46,18 +46,6 @@ class MappingError(UserError):
         mapping[key] = value
 
 
-def parse_int(text, description=None):
-    try:
-        return int(text, 0)
-    except ValueError:
-        description = '' if description is None else (description + ' ')
-        raise UserError(f'{description}must be integer (got `{text}`)')
-
-
-def parse_optional_int(text, description=None):
-    return None if text == '' else parse_int(text, description)
-
-
 def wrap(tag, action, *args, **kwargs):
     try:
         return action(*args, **kwargs)

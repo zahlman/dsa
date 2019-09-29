@@ -1,21 +1,14 @@
 from ..errors import UserError
 from .file_parsing import SimpleLoader
-from .line_parsing import one_of, TokenError
+from .line_parsing import TokenError
+from .token_parsing import one_of, optional_string, string
 from functools import partial
 from glob import glob
 import os.path
 
 
-class JUNK_ROOT(TokenError):
-    """junk data after root path"""
-
-
-class INVALID_PATH_COMPONENT(TokenError):
-    """module path components must not have `:`/`,`"""
-
-
-class BAD_PATH(UserError):
-    """indented line should be a single token, and specify a dotted path optionally ending in * or **"""
+class BAD_ROOT(TokenError):
+    """Invalid section header for path file"""
 
 
 class INNER_STAR(UserError):
@@ -47,9 +40,9 @@ class PathLoader(SimpleLoader):
 
 
     def unindented(self, tokens):
-        kind, root = JUNK_ROOT.pad(tokens, 1, 2)
-        kind = one_of(*_PATH_TYPES.keys())(kind)
-        root = JUNK_ROOT.singleton(root)
+        kind, root = BAD_ROOT.pad(tokens, 1, 2)
+        kind = one_of(*_PATH_TYPES.keys())(kind, 'root path type')
+        root = optional_string(root, 'root path')
         if root is None:
             root = os.path.join(self._system_root, kind)
         else:
@@ -62,7 +55,7 @@ class PathLoader(SimpleLoader):
         FLOATING_MODULE.require(self._kind is not None)
         pathdict = self._accumulator[self._kind]
         *parts, last = [
-            INVALID_PATH_COMPONENT.singleton(t)
+            string(t, 'path component')
             for t in tokens
         ]
         INNER_STAR.require('*' not in parts)

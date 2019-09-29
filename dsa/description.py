@@ -1,5 +1,6 @@
-from .errors import parse_int, parse_optional_int, SequenceError, UserError
+from .errors import SequenceError, UserError
 from .parsing.line_parsing import token_splitter, TokenError
+from .parsing.token_parsing import integer, optional_integer, optional_string, string
 from functools import partial
 import re
 
@@ -40,9 +41,8 @@ class INVALID_STRIDE(TokenError):
     """invalid range (stride must be positive)"""
 
 
-class SINGLE_TOKEN_REQUIRED(UserError):
-    """{thing} must be a single, single-part token
-    (use `[]` to group multiple words; `,` and `:` are not allowed)"""
+class BAD_ENUM_LINE(TokenError):
+    """enum description line must have range and optional name"""
 
 
 class BAD_DESCRIPTION_HEADER(UserError):
@@ -116,7 +116,7 @@ class LabelledRange:
             return 0
         else:
             MISSING_PARAMETER.require(param is not None)
-            return parse_int(param, 'labelled range parameter')
+            return integer([param], 'labelled range parameter')
 
 
     def parse(self, text):
@@ -211,7 +211,7 @@ class RawDescription:
 
 
     def parse(self, text):
-        return parse_int(text)
+        return integer([text], 'field value')
 
 
 Raw = RawDescription()
@@ -230,17 +230,12 @@ def _parse_range(token):
         low, high, stride = token
     else:
         raise INVALID_RANGE(actual=parts)
-    low = parse_optional_int(low, 'low end of range')
-    high = parse_optional_int(high, 'high end of range')
-    stride = parse_int(stride, 'stride of range')
+    # FIXME this is kinda ugly...
+    low = optional_integer([low], 'low end of range')
+    high = optional_integer([high], 'high end of range')
+    stride = integer([stride], 'stride of range')
     INVALID_STRIDE.require(stride > 0)
     return low, high, stride
-
-
-def _get_single(token, thing):
-    SINGLE_TOKEN_REQUIRED.require(len(token) == 1, thing=thing)
-    SINGLE_TOKEN_REQUIRED.require(len(token[0]) == 1, thing=thing)
-    return token[0][0]
 
 
 class EnumDescriptionLoader:
@@ -251,10 +246,10 @@ class EnumDescriptionLoader:
 
 
     def add_line(self, line_tokens):
-        values, *label = line_tokens
+        values, label = BAD_ENUM_LINE.pad(line_tokens, 1, 2)
         low, high, stride = _parse_range(values)
         # FIXME: take `stride` into consideration
-        label = _get_single(label, 'enum name') if label else None
+        label = optional_string(label, 'enum name')
         self.ranges.append((low, high, label))
 
 
@@ -270,7 +265,8 @@ class FlagsDescriptionLoader:
 
 
     def add_line(self, line_tokens):
-        self.names.append(_get_single(line_tokens, 'flag'))
+        flag, = string(BAD_ENUM_LINE.pad(line_tokens, 1, 1), 'flag name')
+        self.names.append(flag)
 
 
     def result(self):

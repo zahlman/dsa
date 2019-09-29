@@ -1,6 +1,7 @@
 from .errors import SequenceError, UserError
 from .field import field_arguments, make_field, member_field_data
-from .parsing.line_parsing import integer, TokenError, TupleError
+from .parsing.line_parsing import TokenError
+from .parsing.token_parsing import integer
 
 
 class BAD_FIXED_VALUE(SequenceError):
@@ -11,7 +12,7 @@ class BAD_VALUE_HEADER(UserError):
     """invalid extra data for Value"""
 
 
-class INVALID_POINTER(TupleError):
+class INVALID_POINTER(TokenError):
     """missing info for Pointer"""
 
 
@@ -162,7 +163,7 @@ class PointerLoader:
         # The typename for the Pointer was already extracted from the `tokens`.
         # It will be specified later.
         size, tokens = INVALID_POINTER.shift(tokens)
-        self._bits = integer(size)
+        self._bits = integer(size, 'pointer size (in bits)')
         octets, leftover = divmod(self._bits, 8)
         BAD_POINTER_SIZE.require(not leftover)
         self._args = field_arguments(tokens)

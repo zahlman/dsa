@@ -3,10 +3,7 @@ from ..errors import MappingError, UserError
 from ..member import ValueLoader, PointerLoader
 from .file_parsing import SimpleLoader
 from .line_parsing import TokenError
-
-
-class UNKNOWN_SECTION_TYPE(MappingError):
-    """unrecognized section type `{key}`"""
+from .token_parsing import converting, string
 
 
 class FLOATING_INDENT(UserError):
@@ -17,20 +14,8 @@ class INVALID_SECTION_HEADER(TokenError):
     """invalid section header (must have 2 tokens; has {actual} tokens)"""
 
 
-class INVALID_SECTION_TYPE(TokenError):
-    """invalid section type (token must be single-part; has {actual} parts)"""
-
-
-class INVALID_NAME(TokenError):
-    """invalid {thing} name (token must be single-part; has {actual} parts)"""
-
-
 class DUPLICATE_SECTION(MappingError):
     """duplicate or conflicting definition for `{section_type} {key}`"""
-
-
-class DUPLICATE_TYPE(MappingError):
-    """duplicate definition for type `{key}`"""
 
 
 class TypeLoader(SimpleLoader):
@@ -40,16 +25,11 @@ class TypeLoader(SimpleLoader):
         self._current_datum = None
         self._descriptions = {}
         self._members = {}
-
-
-    def _categorize(self, section_type):
-        return UNKNOWN_SECTION_TYPE.get(
-            {
-                'flags': (FlagsDescriptionLoader, self._descriptions),
-                'enum': (EnumDescriptionLoader, self._descriptions),
-                'type': (ValueLoader, self._members),
-                'pointer': (PointerLoader, self._members)
-            }, section_type
+        self._section_map = converting(
+            flags=(FlagsDescriptionLoader, self._descriptions),
+            enum=(EnumDescriptionLoader, self._descriptions),
+            type=(ValueLoader, self._members),
+            pointer=(PointerLoader, self._members)
         )
 
 
@@ -57,8 +37,8 @@ class TypeLoader(SimpleLoader):
         INVALID_SECTION_HEADER.require(len(tokens) >= 2)
         section_type, name, *flags = tokens
         return (
-            INVALID_SECTION_TYPE.singleton(section_type),
-            INVALID_NAME.singleton(name, thing=section_type),
+            self._section_map(section_type, 'section type'),
+            string(name, section_type),
             flags
         )
 
@@ -70,7 +50,7 @@ class TypeLoader(SimpleLoader):
 
     def unindented(self, tokens):
         section_type, name, flags = self._parse_section_header(tokens)
-        cls, storage = self._categorize(section_type)
+        cls, storage = section_type
         self._current_datum = cls(flags)
         DUPLICATE_SECTION.add_unique(
             storage, name, self._current_datum, section_type=section_type

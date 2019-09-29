@@ -1,6 +1,7 @@
 from ..errors import MappingError, UserError
 from ..ui.tracing import trace
-from .line_parsing import integer, TokenError
+from .line_parsing import TokenError
+from .token_parsing import integer, string
 
 
 class UNRECOGNIZED_LABEL(MappingError):
@@ -19,10 +20,6 @@ class BAD_GROUP_LINE(TokenError):
     """bad group line; should be @@<group name> <chunk name> <position>"""
 
 
-class BAD_CHUNK_NAME(TokenError):
-    """chunk name must be single-part token (has {actual} parts)"""
-
-
 class STRUCT_OUTSIDE_CHUNK(TokenError):
     """struct must be inside a chunk"""
 
@@ -37,10 +34,6 @@ class UNSUPPORTED_GROUP(TokenError):
 
 class TOO_MANY_ATS(TokenError):
     """unrecognized directive; may have at most two @ signs"""
-
-
-class BAD_LINE_START(TokenError):
-    """directive or struct name must be single-part token (has {actual} parts)"""
 
 
 class DUPLICATE_CHUNK_LOCATION(MappingError):
@@ -113,8 +106,8 @@ class Chunk:
         UNCLOSED_CHUNK.require(self._group is None)
         self._group = group
         name, location = BAD_GROUP_LINE.pad(params, 2, 2)
-        self._chunk_name = BAD_CHUNK_NAME.singleton(name)
-        self._location = integer(location)
+        self._chunk_name = string(name, 'chunk name')
+        self._location = integer(location, 'chunk position')
 
 
     def _add_struct(self, first, rest):
@@ -162,7 +155,7 @@ def _process_ats(tokens):
     first, *rest = tokens
     # TODO: revisit this if/when implicit struct names
     # are implemented for single-struct groups.
-    first = BAD_LINE_START.singleton(first)
+    first = string(first, 'directive or struct name')
     size = len(first)
     first = first.lstrip('@')
     count = size - len(first)

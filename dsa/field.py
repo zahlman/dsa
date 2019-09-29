@@ -1,22 +1,18 @@
 from .description import Raw
-from .errors import parse_int, MappingError, UserError
-from .parsing.line_parsing import arguments, base, boolean, integer, string, TupleError, TokenError
-
+from .errors import MappingError, UserError
+from .parsing.line_parsing import arguments, TokenError
+from .parsing.token_parsing import base, boolean, integer, string
 
 class UNALIGNED_POINTER(UserError):
     """cannot refer to this address (wrong alignment)"""
 
 
-class INVALID_LINE(TupleError):
+class INVALID_LINE(TokenError):
     """not enough tokens for field description line"""
 
 
 class INVALID_BF(TokenError):
     """invalid bit size and/or fixed value (token should have 1..2 parts, has {actual})"""
-
-
-class INVALID_NAME(TokenError):
-    """field name must be single-part"""
 
 
 class MISSING_DESCRIPTION(MappingError):
@@ -123,10 +119,10 @@ def field_arguments(tokens):
 def member_field_data(tokens):
     bf, tokens = INVALID_LINE.shift(tokens)
     bits, fixed = INVALID_BF.pad(bf, 1, 2)
-    bits = parse_int(bits, 'bit count')
+    bits = integer([bits], 'bit count')
     if fixed is None:
         name, tokens = INVALID_LINE.shift(tokens)
-        name = INVALID_NAME.singleton(name)
+        name = string(name, 'field name')
     else:
         name = None
     args = field_arguments(tokens)

@@ -1,28 +1,25 @@
 from ..errors import MappingError, UserError
 from ..structs import Struct, StructGroup
 from .file_parsing import SimpleLoader
-from .line_parsing import arguments, boolean, hexdump, one_of, positive_integer, TupleError, TokenError
+from .line_parsing import arguments, TokenError
+from .token_parsing import boolean, hexdump, make_set, one_of, positive_integer, string
 from collections import OrderedDict
-
-
-class INVALID_STRUCT_NAME(TokenError):
-    """struct name must be single-part (has {actual} parts)"""
 
 
 class NEXT_LAST_CONFLICT(UserError):
     """`next` and `last` options are mutually exclusive"""
 
 
-class BAD_MEMBER(TupleError):
+class BAD_MEMBER(TokenError):
     """not enough or too many tokens for member specification"""
 
 
-class INVALID_TF(TupleError):
+class INVALID_TF(TokenError):
     # Should be impossible?
     """invalid typename/fixed data"""
 
 
-class BAD_REFERENT(TupleError):
+class BAD_REFERENT(TokenError):
     """invalid specification for pointer referent"""
 
 
@@ -30,7 +27,7 @@ class UNRECOGNIZED_TYPE(MappingError):
     """unrecognized type {key}"""
 
 
-class NOT_FIXED_OR_NAMED(TupleError):
+class NOT_FIXED_OR_NAMED(TokenError):
     """member must have either a name or a fixed value"""
 
 
@@ -58,17 +55,17 @@ def parse_options(line_tokens):
     return arguments(line_tokens, {
         'align': (positive_integer, 1),
         'endian': one_of('big', 'little'),
-        'first': (set, None),
+        'first': (make_set, None),
         'count': (positive_integer, None),
         'terminator': (hexdump, None)
     })
 
 
-def parse_struct_header(line_tokens):
+def _parse_struct_header(line_tokens):
     name, *flag_tokens = line_tokens # TODO: support for aliases
-    name, = INVALID_STRUCT_NAME.pad(name, 1, 1)
+    name = string(name, 'struct name')
     options = arguments(
-        flag_tokens, {'next': (set, None), 'last': (boolean, False)}
+        flag_tokens, {'next': (make_set, None), 'last': (boolean, False)}
     )
     if options.last:
         NEXT_LAST_CONFLICT.require(options.next is None)
@@ -80,7 +77,7 @@ def parse_struct_header(line_tokens):
 
 class StructData:
     def __init__(self, line_tokens, alignment):
-        self._name, self._followers = parse_struct_header(line_tokens)
+        self._name, self._followers = _parse_struct_header(line_tokens)
         self._data = []
         self._alignment = alignment
 
@@ -108,7 +105,7 @@ class StructData:
         if not fixed: # should be an empty list
             fixed = None # normalize
             name, tokens = NOT_FIXED_OR_NAMED.shift(tokens)
-            name = INVALID_STRUCT_NAME.singleton(name)
+            name = string(name, 'member name')
             if tokens:
                 ref_token, tokens = BAD_MEMBER.shift(tokens)
                 BAD_MEMBER.require(not tokens)
