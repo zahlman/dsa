@@ -2,15 +2,12 @@ from ..description import EnumDescriptionLoader, FlagsDescriptionLoader
 from ..errors import MappingError, UserError
 from ..member import ValueLoader, PointerLoader
 from .file_parsing import SimpleLoader
+from .line_parsing import line_parser
 from .token_parsing import single_parser
 
 
 class FLOATING_INDENT(UserError):
     """indented line outside block"""
-
-
-class INVALID_SECTION_HEADER(UserError):
-    """invalid section header (must have 2 tokens; has {actual} tokens)"""
 
 
 class DUPLICATE_SECTION(MappingError):
@@ -24,24 +21,22 @@ class TypeLoader(SimpleLoader):
         self._current_datum = None
         self._descriptions = {}
         self._members = {}
-        self._section_parser = single_parser(
-            'section type',
-            {
-                'flags': (FlagsDescriptionLoader, self._descriptions),
-                'enum': (EnumDescriptionLoader, self._descriptions),
-                'type': (ValueLoader, self._members),
-                'pointer': (PointerLoader, self._members)
-            }
-        )
-
-
-    def _parse_section_header(self, tokens):
-        INVALID_SECTION_HEADER.require(len(tokens) >= 2)
-        section_type, name, *flags = tokens
-        return (
-            self._section_parser(section_type),
-            single_parser(section_type, 'string')(name),
-            flags
+        self._section_header_parser = line_parser(
+            'section header',
+            single_parser(
+                'type',
+                {
+                    # When this value is parsed, "convert" it such that we
+                    # obtain the corresponding loader and storage location,
+                    # but also remember the original text for error reporting.
+                    'flags': ('flags', FlagsDescriptionLoader, self._descriptions),
+                    'enum': ('enum', EnumDescriptionLoader, self._descriptions),
+                    'type': ('type', ValueLoader, self._members),
+                    'pointer': ('pointer', PointerLoader, self._members)
+                }
+            ),
+            single_parser('name', 'string'),
+            required=2, more=True
         )
 
 
@@ -51,11 +46,12 @@ class TypeLoader(SimpleLoader):
 
 
     def unindented(self, tokens):
-        section_type, name, flags = self._parse_section_header(tokens)
-        cls, storage = section_type
-        self._current_datum = cls(flags)
+        section, name, flags = self._section_header_parser(tokens)
+        typename, loader, storage = section
+        # Set up a new loader and also remember it in the appropriate category.
+        self._current_datum = loader(flags)
         DUPLICATE_SECTION.add_unique(
-            storage, name, self._current_datum, section_type=section_type
+            storage, name, self._current_datum, section_type=typename
         )
 
 
