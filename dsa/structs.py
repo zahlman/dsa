@@ -1,51 +1,43 @@
-from . import errors
-from .parsing.line_parsing import line_parser, TokenError
+from .errors import wrap as wrap_errors, SequenceError, UserError
+from .parsing.line_parsing import line_parser
 from .parsing.token_parsing import single_parser
 import re
 
 
-class UNKNOWN_GROUP(errors.MappingError):
-    """attempting to follow pointer to unknown group `{key}`"""
-
-
-class UNRECOGNIZED_FOLLOWERS(errors.UserError):
+class UNRECOGNIZED_FOLLOWERS(UserError):
     """unrecognized followers `{extra}` for struct `{current}`"""
 
 
-class MISALIGNED_CHUNK(errors.UserError):
+class MISALIGNED_CHUNK(UserError):
     """chunk not aligned to multiple of {alignment} boundary"""
 
 
-class MISSING_TERMINATOR_NATURAL(errors.UserError):
+class MISSING_TERMINATOR_NATURAL(UserError):
     """missing terminator after `{previous}` struct"""
 
 
-class MISSING_CHUNKS(errors.UserError):
+class MISSING_CHUNKS(UserError):
     """premature end of chunk; {remaining} struct(s) missing"""
 
 
-class MISSING_TERMINATOR_COUNTED(errors.UserError):
+class MISSING_TERMINATOR_COUNTED(UserError):
     """missing terminator after {count} struct(s)"""
 
 
-class NO_MATCH(errors.SequenceError):
+class NO_MATCH(SequenceError):
     """invalid source data at 0x{position:X}"""
 
 
-class CHUNK_TOO_BIG(errors.UserError):
+class CHUNK_TOO_BIG(UserError):
     """too many structs in chunk"""
 
 
-class CHUNK_TOO_SMALL(errors.UserError):
+class CHUNK_TOO_SMALL(UserError):
     """not enough structs in chunk"""
 
 
-class MULTIPART_STRUCT_NAME(TokenError):
-    """struct name token must be single-part (has {actual} parts)"""
-
-
 # Doesn't quite fit the pattern for a MappingError.
-class INVALID_FOLLOWER(errors.UserError):
+class INVALID_FOLLOWER(UserError):
     """struct `{name}` invalid here (valid options: {followers})"""
 
 
@@ -97,13 +89,13 @@ class Member:
 
 
     def format(self, value, lookup):
-        return errors.wrap(
+        return wrap_errors(
             self.tag, self._implementation.format, value, lookup
         )
 
 
     def parse(self, items):
-        return errors.wrap(
+        return wrap_errors(
             self.tag, self._implementation.parse, items
         )
 
@@ -276,7 +268,7 @@ class StructGroup:
 
 
     def format(self, tag, name, match, lookup):
-        tokens = errors.wrap(
+        tokens = wrap_errors(
             tag, self.structs[name].format, match, lookup
         )
         return (name,) + tokens

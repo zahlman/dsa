@@ -4,31 +4,6 @@ from functools import partial
 import re, textwrap
 
 
-class TokenError(UserError):
-    """Represents an error in the number of tokens on a line or the number of
-    parts of a token."""
-
-
-    @classmethod
-    def pad(cls, token, required, total, **kwargs):
-        """Helper for verifying and sanitizing the number of components."""
-        actual = len(token)
-        if required <= actual <= total:
-            return token + ([[]] * (total - actual))
-        raise cls(actual=actual, **kwargs)
-
-
-    # Used either to take a token from the front of a line
-    # or a token part from the front of a token.
-    @classmethod
-    def shift(cls, tokens, **kwargs):
-        try:
-            first, *rest = tokens
-            return first, rest
-        except ValueError:
-            raise cls(**kwargs)
-
-
 class LineError(UserError):
     def __init__(self, **kwargs):
         space = ' ' * kwargs['position']

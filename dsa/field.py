@@ -1,14 +1,11 @@
 from .description import Raw
 from .errors import MappingError, UserError
-from .parsing.line_parsing import argument_parser, line_parser, TokenError
+from .parsing.line_parsing import argument_parser, line_parser
 from .parsing.token_parsing import make_parser, single_parser
+
 
 class UNALIGNED_POINTER(UserError):
     """cannot refer to this address (wrong alignment)"""
-
-
-class INVALID_LINE(TokenError):
-    """not enough tokens for field description line"""
 
 
 class MISSING_DESCRIPTION(MappingError):

@@ -1,6 +1,6 @@
 from ..errors import MappingError, UserError
 from ..ui.tracing import trace
-from .line_parsing import line_parser, TokenError
+from .line_parsing import line_parser
 from .token_parsing import single_parser
 
 
@@ -8,31 +8,27 @@ class UNRECOGNIZED_LABEL(MappingError):
     """unrecognized label `@{key}`"""
 
 
-class LABEL_PARAMS(TokenError):
+class LABEL_PARAMS(UserError):
     """chunk-internal label may not have parameters"""
 
 
-class UNCLOSED_CHUNK(TokenError):
+class UNCLOSED_CHUNK(UserError):
     """missing `@@` line to close chunk before starting a new one"""
 
 
-class BAD_GROUP_LINE(TokenError):
-    """bad group line; should be @@<group name> <chunk name> <position>"""
-
-
-class STRUCT_OUTSIDE_CHUNK(TokenError):
+class STRUCT_OUTSIDE_CHUNK(UserError):
     """struct must be inside a chunk"""
 
 
-class NO_CHUNK_DEFINITION(TokenError):
+class NO_CHUNK_DEFINITION(UserError):
     """chunk has no group/chunk name line"""
 
 
-class UNSUPPORTED_GROUP(TokenError):
+class UNSUPPORTED_GROUP(UserError):
     """`{name}` group is unsupported"""
 
 
-class TOO_MANY_ATS(TokenError):
+class TOO_MANY_ATS(UserError):
     """unrecognized directive; may have at most two @ signs"""
 
 

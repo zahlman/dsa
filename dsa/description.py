@@ -1,5 +1,5 @@
 from .errors import SequenceError, UserError
-from .parsing.line_parsing import line_parser, token_splitter, TokenError
+from .parsing.line_parsing import line_parser, token_splitter
 from .parsing.token_parsing import make_parser, single_parser
 from functools import partial
 import re
@@ -27,22 +27,6 @@ class PARSE_FAILED(SequenceError):
 
 class DUPLICATE_FLAG(UserError):
     """duplicate flag names not allowed"""
-
-
-class EMPTY_RANGE(TokenError):
-    """invalid range"""
-
-
-class INVALID_RANGE(TokenError):
-    """invalid range (token should have 1..2 parts, has {actual})"""
-
-
-class INVALID_STRIDE(TokenError):
-    """invalid range (stride must be positive)"""
-
-
-class BAD_ENUM_LINE(TokenError):
-    """enum description line must have range and optional name"""
 
 
 class BAD_DESCRIPTION_HEADER(UserError):

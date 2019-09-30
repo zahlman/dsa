@@ -1,6 +1,6 @@
 from .errors import SequenceError, UserError
 from .field import field_arguments, make_field, member_field_data
-from .parsing.line_parsing import line_parser, TokenError
+from .parsing.line_parsing import line_parser
 from .parsing.token_parsing import single_parser
 
 
@@ -12,20 +12,12 @@ class BAD_VALUE_HEADER(UserError):
     """invalid extra data for Value"""
 
 
-class INVALID_POINTER(TokenError):
-    """missing info for Pointer"""
-
-
 class INVALID_PARAMETER_COUNT(UserError):
     """{need} parameters required (got {got})"""
 
 
 class INVALID_MEMBER_SIZE(UserError):
     """size of data represented by type must be a multiple of 8 bits"""
-
-
-class BAD_POINTER_SIZE(UserError):
-    """pointer size in bits must be a multiple of 8"""
 
 
 def _extract(value, offset, size):

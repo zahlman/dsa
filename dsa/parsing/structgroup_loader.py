@@ -1,7 +1,7 @@
 from ..errors import MappingError, UserError
 from ..structs import Struct, StructGroup
 from .file_parsing import SimpleLoader
-from .line_parsing import argument_parser, line_parser, TokenError
+from .line_parsing import argument_parser, line_parser
 from .token_parsing import make_parser, single_parser
 from collections import OrderedDict
 
@@ -10,25 +10,8 @@ class NEXT_LAST_CONFLICT(UserError):
     """`next` and `last` options are mutually exclusive"""
 
 
-class BAD_MEMBER(TokenError):
+class BAD_MEMBER(UserError):
     """not enough or too many tokens for member specification"""
-
-
-class INVALID_TF(TokenError):
-    # Should be impossible?
-    """invalid typename/fixed data"""
-
-
-class BAD_REFERENT(TokenError):
-    """invalid specification for pointer referent"""
-
-
-class UNRECOGNIZED_TYPE(MappingError):
-    """unrecognized type {key}"""
-
-
-class NOT_FIXED_OR_NAMED(TokenError):
-    """member must have either a name or a fixed value"""
 
 
 class DUPLICATE_STRUCT(MappingError):
@@ -45,10 +28,6 @@ class NO_OPTIONS(UserError):
 
 class NO_STRUCTS(UserError):
     """empty struct group definition (no structs)"""
-
-
-class DUPLICATE_GROUP(MappingError):
-    """duplicate definition for struct group `{key}`"""
 
 
 _parse_options = argument_parser(

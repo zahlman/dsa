@@ -2,7 +2,6 @@ from ..description import EnumDescriptionLoader, FlagsDescriptionLoader
 from ..errors import MappingError, UserError
 from ..member import ValueLoader, PointerLoader
 from .file_parsing import SimpleLoader
-from .line_parsing import TokenError
 from .token_parsing import single_parser
 
 
@@ -10,7 +9,7 @@ class FLOATING_INDENT(UserError):
     """indented line outside block"""
 
 
-class INVALID_SECTION_HEADER(TokenError):
+class INVALID_SECTION_HEADER(UserError):
     """invalid section header (must have 2 tokens; has {actual} tokens)"""
 
 

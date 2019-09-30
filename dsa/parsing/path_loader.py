@@ -1,14 +1,10 @@
 from ..errors import UserError
 from .file_parsing import SimpleLoader
-from .line_parsing import line_parser, TokenError
+from .line_parsing import line_parser
 from .token_parsing import single_parser
 from functools import partial
 from glob import glob
 import os.path
-
-
-class BAD_ROOT(TokenError):
-    """Invalid section header for path file"""
 
 
 class INNER_STAR(UserError):
