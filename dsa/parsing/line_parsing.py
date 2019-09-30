@@ -119,6 +119,7 @@ def format_line(tokens):
     )
 
 
+# Parsing functionality used elsewhere.
 class Namespace:
     def __init__(self, items):
         for key, value in items.items():
@@ -157,4 +158,45 @@ def argument_parser(defaults, **parameters):
             (lookup, 'argument name'),
             ('[string', 'argument data')
         )
+    )
+
+
+class BAD_LINE(UserError):
+    """{description} line should have {expected} tokens (has {actual})"""
+
+
+def _extract_gen(more, parsers, line):
+    for parser, token in zip(parsers, line):
+        yield parser(token)
+    if len(parsers) > len(line):
+        for p in parsers[len(line):]:
+            yield p(())
+    if more:
+        # we yield an empty sequence when there isn't an excess.
+        yield line[len(parsers):]
+
+
+def _extract_tokens(description, extracted, required, more, parsers, line):
+    assert required <= len(parsers)
+    actual = len(line) + extracted
+    low = required + extracted
+    high = len(parsers) + extracted
+    expected = f'at least {low}' if more else f'{low}-{high}'
+    BAD_LINE.require(
+        (actual >= low) and ((actual <= high) or more),
+        description=description, expected=expected, actual=actual
+    )
+    return tuple(_extract_gen(more, parsers, line))
+
+
+def line_parser(description, *parsers, extracted=0, required=0, more=False):
+    """Create a parser for the first several tokens of a line.
+    description: used for crafting error messages.
+    extracted: number of previously extracted tokens, for error reporting.
+    required: proxy tokens are used if there are more than this many `parsers`.
+    more: if true, additional tokens are captured in a tuple
+    (otherwise an error is reported for any additional tokens).
+    parsers: output contains one item per parser (plus one if `more`)."""
+    return partial(
+        _extract_tokens, description, extracted, required, more, parsers
     )
