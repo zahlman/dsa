@@ -181,7 +181,7 @@ def _extract_tokens(description, extracted, required, more, parsers, line):
     actual = len(line) + extracted
     low = required + extracted
     high = len(parsers) + extracted
-    expected = f'at least {low}' if more else f'{low}-{high}'
+    expected = f'at least {low}' if more else f'exactly {low}' if low == high else f'{low}-{high}'
     BAD_LINE.require(
         (actual >= low) and ((actual <= high) or more),
         description=description, expected=expected, actual=actual
