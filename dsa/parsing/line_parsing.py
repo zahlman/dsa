@@ -36,6 +36,10 @@ class MISSING_PARAMETERS(UserError):
     """missing required parameters `{missing}`"""
 
 
+class BAD_LINE(UserError):
+    """{description} line should have {expected} tokens (has {actual})"""
+
+
 def _normalize(token):
     return ' '.join(token.split())
 
@@ -55,24 +59,23 @@ _tokenizer = re.compile('|'.join((
 )))
 
 
-def _token_gen(line):
+def _clean_token(match, line):
     # Leading whitespace was handled in file_parsing.
-    for match in _tokenizer.finditer(line):
-        # Exactly one group should match.
-        groupname = match.lastgroup
-        text = match.group(groupname)
-        position = match.start()
-        UNMATCHED_BRACKET.require(
-            groupname != 'unmatched',
-            position=position, bracket=text, line=line
-        )
-        text = _normalize(text)
-        EMPTY_TOKEN.require(bool(text), position=position, line=line)
-        yield _split(text)
+    # Exactly one group should match.
+    groupname = match.lastgroup
+    text = match.group(groupname)
+    position = match.start()
+    UNMATCHED_BRACKET.require(
+        groupname != 'unmatched',
+        position=position, bracket=text, line=line
+    )
+    text = _normalize(text)
+    EMPTY_TOKEN.require(bool(text), position=position, line=line)
+    return _split(text)
 
 
 def tokenize(line):
-    result = list(_token_gen(line))
+    result = [_clean_token(match, line) for match in _tokenizer.finditer(line)]
     assert len(result) > 0 # empty lines should have been stripped.
     assert [] not in result # empty tokens should have raised an exception.
     return result
@@ -134,10 +137,6 @@ def argument_parser(defaults, **parameters):
             ('[string', 'argument data')
         )
     )
-
-
-class BAD_LINE(UserError):
-    """{description} line should have {expected} tokens (has {actual})"""
 
 
 def _extract_gen(more, parsers, line):
