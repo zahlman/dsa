@@ -1,7 +1,7 @@
 from ..errors import UserError
 from .file_parsing import SimpleLoader
 from .line_parsing import TokenError
-from .token_parsing import make_parser
+from .token_parsing import single_parser
 from functools import partial
 from glob import glob
 import os.path
@@ -30,16 +30,10 @@ _PATH_TYPES = {
 }
 
 
-_kind_parser = make_parser(
-    'root path type',
-    (set(_PATH_TYPES.keys()), 'type id')
-)
+_kind_parser = single_parser('root path type', set(_PATH_TYPES.keys()))
 
 
-_root_parser = make_parser(
-    'root path',
-    ('string?', 'root path')
-)
+_root_parser = single_parser('root path', 'string?')
 
 
 class PathLoader(SimpleLoader):
@@ -53,8 +47,8 @@ class PathLoader(SimpleLoader):
 
     def unindented(self, tokens):
         kind, root = BAD_ROOT.pad(tokens, 1, 2)
-        kind, = _kind_parser(kind)
-        root, = _root_parser(root)
+        kind = _kind_parser(kind)
+        root = _root_parser(root)
         if root is None:
             root = os.path.join(self._system_root, kind)
         else:
@@ -67,7 +61,7 @@ class PathLoader(SimpleLoader):
         FLOATING_MODULE.require(self._kind is not None)
         pathdict = self._accumulator[self._kind]
         *parts, last = [
-            make_parser('path component', ('string', 'path component'))(t)[0]
+            single_parser('path component', 'string')(t)
             for t in tokens
         ]
         INNER_STAR.require('*' not in parts)

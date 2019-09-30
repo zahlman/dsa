@@ -2,7 +2,7 @@ from ..errors import MappingError, UserError
 from ..structs import Struct, StructGroup
 from .file_parsing import SimpleLoader
 from .line_parsing import argument_parser, TokenError
-from .token_parsing import make_parser
+from .token_parsing import single_parser
 from collections import OrderedDict
 
 
@@ -66,7 +66,7 @@ _parse_struct_options = argument_parser(
 
 def _parse_struct_header(line_tokens):
     name, *flag_tokens = line_tokens # TODO: support for aliases
-    name = make_parser('struct name', ('string', 'struct name'))(name)[0]
+    name = single_parser('struct name', 'string')(name)
     options = _parse_struct_options(flag_tokens)
     if options.last:
         NEXT_LAST_CONFLICT.require(options.next is None)
@@ -106,7 +106,7 @@ class StructData:
         if not fixed: # should be an empty list
             fixed = None # normalize
             name, tokens = NOT_FIXED_OR_NAMED.shift(tokens)
-            name = make_parser('member name', ('string', 'member name'))(name)[0]
+            name = single_parser('member name', 'string')(name)
             if tokens:
                 ref_token, tokens = BAD_MEMBER.shift(tokens)
                 BAD_MEMBER.require(not tokens)

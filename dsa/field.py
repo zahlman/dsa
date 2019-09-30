@@ -1,7 +1,7 @@
 from .description import Raw
 from .errors import MappingError, UserError
 from .parsing.line_parsing import argument_parser, TokenError
-from .parsing.token_parsing import make_parser
+from .parsing.token_parsing import make_parser, single_parser
 
 class UNALIGNED_POINTER(UserError):
     """cannot refer to this address (wrong alignment)"""
@@ -117,10 +117,7 @@ _field_size_parser = make_parser(
 )
 
 
-_field_name_parser = make_parser(
-    'field name',
-    ('string', 'name')
-)
+_field_name_parser = single_parser('field name', 'string')
 
 
 def member_field_data(tokens):
@@ -128,7 +125,7 @@ def member_field_data(tokens):
     bits, fixed = _field_size_parser(bf)
     if fixed is None:
         name, tokens = INVALID_LINE.shift(tokens)
-        name = _field_name_parser(name)[0]
+        name = _field_name_parser(name)
     else:
         name = None
     args = field_arguments(tokens)

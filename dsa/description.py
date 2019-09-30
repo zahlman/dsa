@@ -1,6 +1,6 @@
 from .errors import SequenceError, UserError
 from .parsing.line_parsing import token_splitter, TokenError
-from .parsing.token_parsing import make_parser
+from .parsing.token_parsing import make_parser, single_parser
 from functools import partial
 import re
 
@@ -78,6 +78,9 @@ class UnlabelledRange:
             return None # might be matched by a LabelledRange!
 
 
+_labelled_range_parameter = single_parser('labelled range parameter', 'integer')
+
+
 class LabelledRange:
     def __init__(self, low, high, label):
         self.low, self.high = low, high
@@ -116,7 +119,7 @@ class LabelledRange:
             return 0
         else:
             MISSING_PARAMETER.require(param is not None)
-            return make_parser('labelled range parameter', ('integer', 'labelled range parameter'))([param])[0]
+            return _labelled_range_parameter([param])
 
 
     def parse(self, text):
@@ -197,6 +200,9 @@ class FlagsDescription:
         return None if set_flags else value
 
 
+_field_value = single_parser('field value', 'integer')
+
+
 class RawDescription:
     def __init__(self):
         pass
@@ -211,11 +217,13 @@ class RawDescription:
 
 
     def parse(self, text):
-        # FIXME
-        return make_parser('field value', ('integer', 'field value'))([text])[0]
+        return _field_value([text])
 
 
 Raw = RawDescription()
+
+
+_enum_value = single_parser('enum value', 'integer')
 
 
 def _parse_range(token):
@@ -223,7 +231,7 @@ def _parse_range(token):
     # empty parts; but a 2-part token works the same as a 3-part one with
     # an empty third part.
     if len(token) == 1:
-        low = make_parser('enum value', ('integer', 'enum value'))(token)[0]
+        low = _enum_value(token)
         return (low, low, 1)
     else:
         return make_parser(
@@ -232,6 +240,11 @@ def _parse_range(token):
             ('integer?', 'high value'),
             ('integer?', 'stride')
         )(token)
+
+
+# When a name is actually provided, it corresponds to a LabelledRange;
+# when absent an UnlabelledRange is produced.
+_enum_name = single_parser('enum name', 'string?')
 
 
 class EnumDescriptionLoader:
@@ -245,12 +258,15 @@ class EnumDescriptionLoader:
         values, label = BAD_ENUM_LINE.pad(line_tokens, 1, 2)
         low, high, stride = _parse_range(values)
         # FIXME: take `stride` into consideration
-        label = make_parser('enum name', ('string?', 'enum name'))(label)[0]
+        label = _enum_name(label)
         self.ranges.append((low, high, label))
 
 
     def result(self):
         return EnumDescription(self.ranges)
+
+
+_flag_name = single_parser('flag name', 'string')
 
 
 class FlagsDescriptionLoader:
@@ -262,7 +278,7 @@ class FlagsDescriptionLoader:
 
     def add_line(self, line_tokens):
         flag, = BAD_ENUM_LINE.pad(line_tokens, 1, 1)
-        flag = make_parser('flag name', ('string', 'flag name'))(flag)[0]
+        flag = _flag_name(flag)
         self.names.append(flag)
 
 

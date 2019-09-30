@@ -1,7 +1,7 @@
 from ..errors import MappingError, UserError
 from ..ui.tracing import trace
 from .line_parsing import TokenError
-from .token_parsing import make_parser
+from .token_parsing import single_parser
 
 
 class UNRECOGNIZED_LABEL(MappingError):
@@ -106,9 +106,8 @@ class Chunk:
         UNCLOSED_CHUNK.require(self._group is None)
         self._group = group
         name, location = BAD_GROUP_LINE.pad(params, 2, 2)
-        # FIXME this didn't get any simpler...
-        self._chunk_name = make_parser('chunk name', ('string', 'chunk name'))(name)[0]
-        self._location = make_parser('chunk position', ('integer', 'chunk position'))(location)[0]
+        self._chunk_name = single_parser('chunk name', 'string')(name)
+        self._location = single_parser('chunk position', 'integer')(location)
 
 
     def _add_struct(self, first, rest):
@@ -156,7 +155,7 @@ def _process_ats(tokens):
     first, *rest = tokens
     # TODO: revisit this if/when implicit struct names
     # are implemented for single-struct groups.
-    first = make_parser('directive or struct name', ('string', 'directive or struct name'))(first)[0]
+    first = single_parser('directive or struct name', 'string')(first)
     size = len(first)
     first = first.lstrip('@')
     count = size - len(first)

@@ -1,5 +1,5 @@
 from ..errors import MappingError, UserError
-from .token_parsing import make_parser
+from .token_parsing import make_parser, single_parser
 from functools import partial
 import re, textwrap
 
@@ -133,7 +133,7 @@ def _parse_arguments(expected, defaults, dispatch, tokens):
         (name, handler), arguments = d
         DUPLICATE_PARAMETER.require(name not in seen)
         seen.add(name)
-        result[name] = handler(arguments)[0]
+        result[name] = handler(arguments)
     missing = expected - set(result.keys())
     MISSING_PARAMETERS.require(not missing, missing=missing)
     return Namespace(result)
@@ -143,7 +143,7 @@ def argument_parser(defaults, **parameters):
     lookup = {
         # Each token can provide a single spec, that will be used
         # to re-parse the token parts after the label.
-        name: (name, make_parser(f'`{name}` argument', (spec, f'`{name}` argument')))
+        name: (name, single_parser(f'`{name}` argument', spec))
         for name, spec in parameters.items()
     }
     # We make a parser that reads the label and the rest of the tokens,
