@@ -36,14 +36,14 @@ class INVALID_HEXDUMP(UserError):
 # Any uncaught StopIteration here is a bug; the token parts have been
 # counted ahead of time and should be exactly sufficient.
 def _string(description, it):
-    yield next(it)
+    return next(it)
 
 
 def _optional_string(description, it):
     try:
-        yield next(it)
+        return next(it)
     except StopIteration:
-        yield None
+        return None
 
 
 def _int_helper(error, description, token):
@@ -56,7 +56,7 @@ def _int_helper(error, description, token):
 
 def _integer(description, it):
     token = next(it)
-    yield _int_helper(BAD_INTEGER, description, token)
+    return _int_helper(BAD_INTEGER, description, token)
 
 
 def _optional_integer(description, it):
@@ -64,7 +64,7 @@ def _optional_integer(description, it):
         token = next(it)
     except StopIteration:
         token = ''
-    yield None if token == '' else _int_helper(BAD_INTEGER, description, token)
+    return None if token == '' else _int_helper(BAD_INTEGER, description, token)
 
 
 def _positive_integer(description, it):
@@ -73,7 +73,7 @@ def _positive_integer(description, it):
     BAD_POSITIVE_INTEGER.require(
         result > 0, token=token, description=description
     )
-    yield result
+    return result
 
 
 def _multiple_of_8(description, it):
@@ -82,7 +82,7 @@ def _multiple_of_8(description, it):
     BAD_POSITIVE_INTEGER.require(
         result % 8 == 0, token=token, description=description
     )
-    yield result
+    return result
 
 
 def _whitelisted_string(whitelist, description, it):
@@ -99,33 +99,27 @@ def _whitelisted_string(whitelist, description, it):
         error = ILLEGAL_OPTIONAL_VALUE
     else:
         error = ILLEGAL_VALUE
-    yield error.get(whitelist, token, allowed=allowed, description=description)
+    return error.get(whitelist, token, allowed=allowed, description=description)
 
 
 def _hexdump(description, it):
     try:
-        yield binascii.unhexlify(''.join(next(it).split()))
+        return binascii.unhexlify(''.join(next(it).split()))
     except binascii.Error as e:
         raise INVALID_HEXDUMP(description=description) from e
 
 
 def _make_set(converter, it):
-    yield set(next(converter(iter((i,)))) for i in it)
+    return set(converter(iter((i,))) for i in it)
 
 
 def _make_seq(converter, it):
-    yield tuple(next(converter(iter((i,)))) for i in it)
+    return tuple(converter(iter((i,))) for i in it)
 
 
 # Main parsing machinery.
 def _add(x, y):
     return None if (x is None or y is None) else x + y
-
-
-def _extract_gen(converters, it):
-    # Arguments are pre-counted.
-    for converter in converters:
-        yield from converter(it)
 
 
 def _check(low, high, name, token):
@@ -143,7 +137,9 @@ def _check(low, high, name, token):
 
 def _extract(converters, low, high, name, token):
     _check(low, high, name, token)
-    return tuple(_extract_gen(converters, iter(token)))
+    it = iter(token) # must create ahead of time, so that it's reused
+    # (the iterator tracks the state of parsing through the token)
+    return tuple(converter(it) for converter in converters)
 
 
 # Separate logic isn't strictly necessary, but it's simpler and faster.
