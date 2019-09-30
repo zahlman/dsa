@@ -79,7 +79,7 @@ def _positive_integer(description, it):
 def _multiple_of_8(description, it):
     token = next(it)
     result = _int_helper(BAD_FIELD_SIZE, description, token)
-    BAD_POSITIVE_INTEGER.require(
+    BAD_FIELD_SIZE.require(
         result % 8 == 0, token=token, description=description
     )
     return result
