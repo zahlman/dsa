@@ -128,7 +128,7 @@ def _extract_gen(converters, it):
         yield from converter(it)
 
 
-def _extract(converters, low, high, name, token):
+def _check(low, high, name, token):
     actual = len(token)
     allowed = f'at least {low}' if high is None else f'{low}-{high}'
     WRONG_PART_COUNT.require(
@@ -139,7 +139,20 @@ def _extract(converters, low, high, name, token):
         high is None or actual <= high,
         description=name, actual=actual, allowed=allowed
     )
+
+
+def _extract(converters, low, high, name, token):
+    _check(low, high, name, token)
     return tuple(_extract_gen(converters, iter(token)))
+
+
+# Separate logic isn't strictly necessary, but it's simpler and faster.
+# As a convenience, we extract the item from the 1-tuple.
+def _extract_one(converter, low, high, name, token):
+    _check(low, high, name, token)
+    result = tuple(converter(iter(token)))
+    assert len(result) == 1
+    return result[0]
 
 
 def _make_converter(spec, description):
@@ -184,3 +197,8 @@ def make_parser(name, *specs):
     else:
         high = sum(highs)
     return partial(_extract, converters, low, high, name)
+
+
+def single_parser(name, spec):
+    converter, low, high = _make_converter(spec, name)
+    return partial(_extract_one, converter, low, high, name)
