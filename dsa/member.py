@@ -1,6 +1,6 @@
 from .errors import SequenceError, UserError
 from .field import field_arguments, make_field, member_field_data
-from .parsing.line_parsing import TokenError
+from .parsing.line_parsing import line_parser, TokenError
 from .parsing.token_parsing import single_parser
 
 
@@ -158,15 +158,18 @@ class Pointer:
         return self._field.parse(items[0]).to_bytes(self.size, 'little')
 
 
-_pointer_size_parser = single_parser('pointer size (in bits)', 'fieldsize')
+_pointer_size_parser = line_parser(
+    'pointer specification',
+    single_parser('size (in bits)', 'fieldsize'),
+    required=1, more=True
+)
 
 
 class PointerLoader:
     def __init__(self, tokens):
         # The typename for the Pointer was already extracted from the `tokens`.
         # It will be specified later.
-        size, tokens = INVALID_POINTER.shift(tokens)
-        self._bits = _pointer_size_parser(size)
+        self._bits, tokens = _pointer_size_parser(tokens)
         self._args = field_arguments(tokens)
         # TODO: added lines represent filters applied to the pointed-at data.
 

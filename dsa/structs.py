@@ -1,5 +1,6 @@
 from . import errors
-from .parsing.line_parsing import TokenError
+from .parsing.line_parsing import line_parser, TokenError
+from .parsing.token_parsing import single_parser
 import re
 
 
@@ -197,6 +198,11 @@ def _normalized_graph(graph, first):
     return result
 
 
+_struct_name_parser = line_parser(
+    'struct', single_parser('name', 'string'), required=1, more=True
+)
+
+
 class StructGroup:
     def __init__(self, structs, graph, options):
         self.structs = structs # TODO: optimized dispatch
@@ -280,8 +286,7 @@ class StructGroup:
         CHUNK_TOO_BIG.require(self.size is None or count < self.size)
         followers = self.graph[previous]
         # Name extraction can't fail, since empty lines are skipped.
-        name, *tokens = tokens
-        name, = MULTIPART_STRUCT_NAME.pad(name, 1, 1)
+        name, tokens = _struct_name_parser(tokens)
         INVALID_FOLLOWER.require(
             name in followers, name=name, followers=followers
         )

@@ -1,8 +1,8 @@
 from ..errors import MappingError, UserError
 from ..structs import Struct, StructGroup
 from .file_parsing import SimpleLoader
-from .line_parsing import argument_parser, TokenError
-from .token_parsing import single_parser
+from .line_parsing import argument_parser, line_parser, TokenError
+from .token_parsing import make_parser, single_parser
 from collections import OrderedDict
 
 
@@ -76,6 +76,9 @@ def _parse_struct_header(line_tokens):
     return name, options.next
 
 
+_parse_referent = argument_parser({'referent': None}, referent='string')
+
+
 class StructData:
     def __init__(self, line_tokens, alignment):
         self._name, self._followers = _parse_struct_header(line_tokens)
@@ -99,26 +102,27 @@ class StructData:
 
 
     def add_member(self, tokens, types):
-        typename, tokens = BAD_MEMBER.shift(tokens)
-        typename, fixed = INVALID_TF.shift(typename)
-        member = UNRECOGNIZED_TYPE.get(types, typename)
-        ref_name = None
-        if not fixed: # should be an empty list
-            fixed = None # normalize
-            name, tokens = NOT_FIXED_OR_NAMED.shift(tokens)
-            name = single_parser('member name', 'string')(name)
-            if tokens:
-                ref_token, tokens = BAD_MEMBER.shift(tokens)
-                BAD_MEMBER.require(not tokens)
-                tag, ref_name = BAD_REFERENT.shift(ref_token)
-                ref_name, junk = BAD_REFERENT.shift(ref_name)
-                BAD_REFERENT.require(not junk)
-                BAD_REFERENT.require(tag == 'referent')
-        else:
+        (member, fixed), tokens = line_parser(
+            'struct member',
+            make_parser(
+                'typename/fixed data',
+                (types, 'typename'),
+                ('[string', 'fixed value')
+            ),
+            required=1, more=True
+        )(tokens)
+        if fixed:
             BAD_MEMBER.require(not tokens)
-            name = None
-            fixed = member.parse(fixed)
-        self._data.append((member, name, fixed, ref_name))
+            self._data.append((member, None, member.parse(fixed), None))
+        else:
+            name, tokens = line_parser(
+                'struct member (without fixed value)',
+                single_parser('member name', 'string'),
+                extracted=1, required=1, more=True
+            )(tokens)
+            self._data.append(
+                (member, name, None, _parse_referent(tokens).referent)
+            )
 
 
 class StructGroupLoader(SimpleLoader):

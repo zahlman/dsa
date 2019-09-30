@@ -1,6 +1,6 @@
 from ..errors import MappingError, UserError
 from ..ui.tracing import trace
-from .line_parsing import TokenError
+from .line_parsing import line_parser, TokenError
 from .token_parsing import single_parser
 
 
@@ -75,6 +75,14 @@ class _DummyGroup:
         return b''
 
 
+_chunk_header_parser = line_parser(
+    'chunk info',
+    single_parser('name', 'string'),
+    single_parser('position', 'integer'),
+    required=2
+)
+
+
 class Chunk:
     def __init__(self):
         self._location = None
@@ -105,9 +113,7 @@ class Chunk:
     def _set_group(self, group, params):
         UNCLOSED_CHUNK.require(self._group is None)
         self._group = group
-        name, location = BAD_GROUP_LINE.pad(params, 2, 2)
-        self._chunk_name = single_parser('chunk name', 'string')(name)
-        self._location = single_parser('chunk position', 'integer')(location)
+        self._chunk_name, self._location = _chunk_header_parser(params)
 
 
     def _add_struct(self, first, rest):

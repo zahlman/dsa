@@ -1,6 +1,6 @@
 from .description import Raw
 from .errors import MappingError, UserError
-from .parsing.line_parsing import argument_parser, TokenError
+from .parsing.line_parsing import argument_parser, line_parser, TokenError
 from .parsing.token_parsing import make_parser, single_parser
 
 class UNALIGNED_POINTER(UserError):
@@ -109,23 +109,29 @@ field_arguments = argument_parser(
 )
 
 
-_field_size_parser = make_parser(
-    'field size/value info',
-    ('positive', 'field size'),
-    ('string?', 'fixed value') # will be parsed later,
-    # once a type has been loaded from this line, according to that type.
+_field_size_parser = line_parser(
+    'component of non-pointer member',
+    make_parser(
+        'size/value info',
+        ('positive', 'field size'),
+        ('string?', 'fixed value') # will be parsed later,
+        # once a type has been loaded from this line, according to that type.
+    ),
+    required=1, more=True
 )
 
 
-_field_name_parser = single_parser('field name', 'string')
+_field_name_parser = line_parser(
+    'component of non-pointer member',
+    single_parser('name', 'string'),
+    extracted=1, required=1, more=True
+)
 
 
 def member_field_data(tokens):
-    bf, tokens = INVALID_LINE.shift(tokens)
-    bits, fixed = _field_size_parser(bf)
+    (bits, fixed), tokens = _field_size_parser(tokens)
     if fixed is None:
-        name, tokens = INVALID_LINE.shift(tokens)
-        name = _field_name_parser(name)
+        name, tokens = _field_name_parser(tokens)
     else:
         name = None
     args = field_arguments(tokens)

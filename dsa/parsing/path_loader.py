@@ -1,6 +1,6 @@
 from ..errors import UserError
 from .file_parsing import SimpleLoader
-from .line_parsing import TokenError
+from .line_parsing import line_parser, TokenError
 from .token_parsing import single_parser
 from functools import partial
 from glob import glob
@@ -30,10 +30,12 @@ _PATH_TYPES = {
 }
 
 
-_kind_parser = single_parser('root path type', set(_PATH_TYPES.keys()))
-
-
-_root_parser = single_parser('root path', 'string?')
+_section_parser = line_parser(
+    'path group',
+    single_parser('path type', set(_PATH_TYPES.keys())),
+    single_parser('root path', 'string?'),
+    required=1
+)
 
 
 class PathLoader(SimpleLoader):
@@ -46,9 +48,7 @@ class PathLoader(SimpleLoader):
 
 
     def unindented(self, tokens):
-        kind, root = BAD_ROOT.pad(tokens, 1, 2)
-        kind = _kind_parser(kind)
-        root = _root_parser(root)
+        kind, root = _section_parser(tokens)
         if root is None:
             root = os.path.join(self._system_root, kind)
         else:

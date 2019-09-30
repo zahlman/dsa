@@ -1,5 +1,5 @@
 from .errors import SequenceError, UserError
-from .parsing.line_parsing import token_splitter, TokenError
+from .parsing.line_parsing import line_parser, token_splitter, TokenError
 from .parsing.token_parsing import make_parser, single_parser
 from functools import partial
 import re
@@ -223,7 +223,15 @@ class RawDescription:
 Raw = RawDescription()
 
 
-_enum_value = single_parser('enum value', 'integer')
+_enum_value_parser = single_parser('value', 'integer')
+
+
+_enum_range_parser = make_parser(
+    'range',
+    ('integer?', 'low value'),
+    ('integer?', 'high value'),
+    ('integer?', 'stride')
+)
 
 
 def _parse_range(token):
@@ -231,20 +239,19 @@ def _parse_range(token):
     # empty parts; but a 2-part token works the same as a 3-part one with
     # an empty third part.
     if len(token) == 1:
-        low = _enum_value(token)
+        low = _enum_value_parser(token)
         return (low, low, 1)
     else:
-        return make_parser(
-            'range',
-            ('integer?', 'low value'),
-            ('integer?', 'high value'),
-            ('integer?', 'stride')
-        )(token)
+        return _enum_range_parser(token)
 
 
-# When a name is actually provided, it corresponds to a LabelledRange;
-# when absent an UnlabelledRange is produced.
-_enum_name = single_parser('enum name', 'string?')
+_enum_description_parser = line_parser(
+    'description of enumeration option',
+    _parse_range,
+    # when the name is absent, an UnlabelledRange is produced.
+    single_parser('name', 'string?'),
+    required=1
+)
 
 
 class EnumDescriptionLoader:
@@ -255,10 +262,8 @@ class EnumDescriptionLoader:
 
 
     def add_line(self, line_tokens):
-        values, label = BAD_ENUM_LINE.pad(line_tokens, 1, 2)
-        low, high, stride = _parse_range(values)
+        (low, high, stride), label = _enum_description_parser(line_tokens)
         # FIXME: take `stride` into consideration
-        label = _enum_name(label)
         self.ranges.append((low, high, label))
 
 
@@ -266,7 +271,11 @@ class EnumDescriptionLoader:
         return EnumDescription(self.ranges)
 
 
-_flag_name = single_parser('flag name', 'string')
+_flag_name = line_parser(
+    'description of flag option',
+    single_parser('name', 'string'),
+    required=1
+)
 
 
 class FlagsDescriptionLoader:
@@ -277,9 +286,7 @@ class FlagsDescriptionLoader:
 
 
     def add_line(self, line_tokens):
-        flag, = BAD_ENUM_LINE.pad(line_tokens, 1, 1)
-        flag = _flag_name(flag)
-        self.names.append(flag)
+        self.names.append(_flag_name(line_tokens)[0])
 
 
     def result(self):
