@@ -1,4 +1,6 @@
 from ..errors import MappingError, UserError
+from .token_parsing import make_parser
+from functools import partial
 import re, textwrap
 
 
@@ -12,7 +14,7 @@ class TokenError(UserError):
         """Helper for verifying and sanitizing the number of components."""
         actual = len(token)
         if required <= actual <= total:
-            return token + ([None] * (total - actual))
+            return token + ([[]] * (total - actual))
         raise cls(actual=actual, **kwargs)
 
 
@@ -123,29 +125,36 @@ class Namespace:
             setattr(self, key, value)
 
 
-def _split_whitelist(w):
-    defaults = {}
-    converters = {}
-    for k, v in w.items():
-        if callable(v):
-            converters[k] = v
-        else:
-            c, d = v
-            converters[k] = c
-            defaults[k] = d
-    return defaults, converters
-
-
-def arguments(tokens, parameters):
-    result, converters = _split_whitelist(parameters)
-    specified = {}
+def _parse_arguments(expected, defaults, dispatch, tokens):
+    result = defaults.copy() # in case the parser is reused.
+    seen = set()
     for token in tokens:
-        name, *item = token
-        DUPLICATE_PARAMETER.add_unique(
-            specified, name,
-            UNRECOGNIZED_PARAMETER.get(converters, name)(item, f'`{name}` parameter')
-        )
-    result.update(specified)
-    missing = set(converters.keys()) - set(result.keys())
+        d = dispatch(token)
+        (name, handler), arguments = d
+        DUPLICATE_PARAMETER.require(name not in seen)
+        seen.add(name)
+        result[name] = handler(arguments)[0]
+    missing = expected - set(result.keys())
     MISSING_PARAMETERS.require(not missing, missing=missing)
     return Namespace(result)
+
+
+def argument_parser(defaults, **parameters):
+    lookup = {
+        # Each token can provide a single spec, that will be used
+        # to re-parse the token parts after the label.
+        name: (name, make_parser(f'`{name}` argument', (spec, f'`{name}` argument')))
+        for name, spec in parameters.items()
+    }
+    # We make a parser that reads the label and the rest of the tokens,
+    # converting the label into another parser that handles the rest.
+    # Finally we set up code that will invoke the parser and merge its
+    # results with the `defaults`.
+    return partial(_parse_arguments,
+        set(parameters.keys()), defaults,
+        make_parser(
+            'named argument',
+            (lookup, 'argument name'),
+            ('[string', 'argument data')
+        )
+    )

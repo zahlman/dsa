@@ -1,7 +1,7 @@
 from .errors import SequenceError, UserError
 from .field import field_arguments, make_field, member_field_data
 from .parsing.line_parsing import TokenError
-from .parsing.token_parsing import integer
+from .parsing.token_parsing import make_parser
 
 
 class BAD_FIXED_VALUE(SequenceError):
@@ -158,14 +158,15 @@ class Pointer:
         return self._field.parse(items[0]).to_bytes(self.size, 'little')
 
 
+_pointer_size_parser = make_parser('pointer size (in bits)', ('fieldsize', 'value'))
+
+
 class PointerLoader:
     def __init__(self, tokens):
         # The typename for the Pointer was already extracted from the `tokens`.
         # It will be specified later.
         size, tokens = INVALID_POINTER.shift(tokens)
-        self._bits = integer(size, 'pointer size (in bits)')
-        octets, leftover = divmod(self._bits, 8)
-        BAD_POINTER_SIZE.require(not leftover)
+        self._bits = _pointer_size_parser(size)[0]
         self._args = field_arguments(tokens)
         # TODO: added lines represent filters applied to the pointed-at data.
 

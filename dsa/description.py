@@ -1,6 +1,6 @@
 from .errors import SequenceError, UserError
 from .parsing.line_parsing import token_splitter, TokenError
-from .parsing.token_parsing import integer, optional_integer, optional_string, string
+from .parsing.token_parsing import make_parser
 from functools import partial
 import re
 
@@ -116,7 +116,7 @@ class LabelledRange:
             return 0
         else:
             MISSING_PARAMETER.require(param is not None)
-            return integer([param], 'labelled range parameter')
+            return make_parser('labelled range parameter', ('integer', 'labelled range parameter'))([param])[0]
 
 
     def parse(self, text):
@@ -211,31 +211,27 @@ class RawDescription:
 
 
     def parse(self, text):
-        return integer([text], 'field value')
+        # FIXME
+        return make_parser('field value', ('integer', 'field value'))([text])[0]
 
 
 Raw = RawDescription()
 
 
 def _parse_range(token):
-    parts = len(token)
-    # Empty parts of the token will be converted to None here,
-    # which will allow arbitrarily low/high values as appropriate.
-    if parts == 1:
-        low, high, stride = token[0], token[0], '1'
-        EMPTY_RANGE.require(bool(low)) # could fail if the input is `[]`
-    elif parts == 2:
-        low, high, stride = token[0], token[1], '1'
-    elif parts == 3:
-        low, high, stride = token
+    # We need to distinguish a single-part token from one that has
+    # empty parts; but a 2-part token works the same as a 3-part one with
+    # an empty third part.
+    if len(token) == 1:
+        low = make_parser('enum value', ('integer', 'enum value'))(token)[0]
+        return (low, low, 1)
     else:
-        raise INVALID_RANGE(actual=parts)
-    # FIXME this is kinda ugly...
-    low = optional_integer([low], 'low end of range')
-    high = optional_integer([high], 'high end of range')
-    stride = integer([stride], 'stride of range')
-    INVALID_STRIDE.require(stride > 0)
-    return low, high, stride
+        return make_parser(
+            'range',
+            ('integer?', 'low value'),
+            ('integer?', 'high value'),
+            ('integer?', 'stride')
+        )(token)
 
 
 class EnumDescriptionLoader:
@@ -249,7 +245,7 @@ class EnumDescriptionLoader:
         values, label = BAD_ENUM_LINE.pad(line_tokens, 1, 2)
         low, high, stride = _parse_range(values)
         # FIXME: take `stride` into consideration
-        label = optional_string(label, 'enum name')
+        label = make_parser('enum name', ('string?', 'enum name'))(label)[0]
         self.ranges.append((low, high, label))
 
 
@@ -265,7 +261,8 @@ class FlagsDescriptionLoader:
 
 
     def add_line(self, line_tokens):
-        flag, = string(BAD_ENUM_LINE.pad(line_tokens, 1, 1), 'flag name')
+        flag, = BAD_ENUM_LINE.pad(line_tokens, 1, 1)
+        flag = make_parser('flag name', ('string', 'flag name'))(flag)[0]
         self.names.append(flag)
 
 

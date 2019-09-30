@@ -3,7 +3,7 @@ from ..errors import MappingError, UserError
 from ..member import ValueLoader, PointerLoader
 from .file_parsing import SimpleLoader
 from .line_parsing import TokenError
-from .token_parsing import converting, string
+from .token_parsing import make_parser
 
 
 class FLOATING_INDENT(UserError):
@@ -25,11 +25,14 @@ class TypeLoader(SimpleLoader):
         self._current_datum = None
         self._descriptions = {}
         self._members = {}
-        self._section_map = converting(
-            flags=(FlagsDescriptionLoader, self._descriptions),
-            enum=(EnumDescriptionLoader, self._descriptions),
-            type=(ValueLoader, self._members),
-            pointer=(PointerLoader, self._members)
+        self._section_parser = make_parser(
+            'section type',
+            ({
+                'flags': (FlagsDescriptionLoader, self._descriptions),
+                'enum': (EnumDescriptionLoader, self._descriptions),
+                'type': (ValueLoader, self._members),
+                'pointer': (PointerLoader, self._members)
+            }, 'section type')
         )
 
 
@@ -37,8 +40,8 @@ class TypeLoader(SimpleLoader):
         INVALID_SECTION_HEADER.require(len(tokens) >= 2)
         section_type, name, *flags = tokens
         return (
-            self._section_map(section_type, 'section type'),
-            string(name, section_type),
+            self._section_parser(section_type)[0],
+            make_parser(section_type, ('string', section_type))(name)[0],
             flags
         )
 

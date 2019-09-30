@@ -1,4 +1,4 @@
-from dsa.parsing.token_parsing import integer
+from dsa.parsing.token_parsing import make_parser
 # Any exception raised by the application of a filter will be converted at
 # a higher level. Note that additional parameters will not have been parsed;
 # each will be a sequence representing a possibly-multipart token.
@@ -10,7 +10,7 @@ from dsa.parsing.token_parsing import integer
 # by applying compression, encryption etc. Any parameters after the first are
 # taken from the @ line in the data description file that specified the filter.
 def pack(data, size):
-    size = integer(size, 'chunk size specification')
+    size = make_parser('chunk size specification', ('integer', 'chunk size specification'))(size)[0]
     padding = size - len(data)
     if padding < 0:
         raise ValueError(

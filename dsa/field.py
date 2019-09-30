@@ -1,7 +1,7 @@
 from .description import Raw
 from .errors import MappingError, UserError
-from .parsing.line_parsing import arguments, TokenError
-from .parsing.token_parsing import base, boolean, integer, string
+from .parsing.line_parsing import argument_parser, TokenError
+from .parsing.token_parsing import make_parser
 
 class UNALIGNED_POINTER(UserError):
     """cannot refer to this address (wrong alignment)"""
@@ -9,10 +9,6 @@ class UNALIGNED_POINTER(UserError):
 
 class INVALID_LINE(TokenError):
     """not enough tokens for field description line"""
-
-
-class INVALID_BF(TokenError):
-    """invalid bit size and/or fixed value (token should have 1..2 parts, has {actual})"""
 
 
 class MISSING_DESCRIPTION(MappingError):
@@ -105,24 +101,34 @@ def make_field(bits, args, description_lookup):
     )
 
 
-def field_arguments(tokens):
-    return arguments(
-        tokens,
-        {
-            'bias': (integer, 0), 'stride': (integer, 1),
-            'signed': (boolean, False), 'base': (base, hex),
-            'values': (string, None)
-        }
-    )
+field_arguments = argument_parser(
+    {'bias': 0, 'stride': 1, 'signed': False, 'base': hex, 'values': None},
+    bias='integer', stride='positive', values='string',
+    signed={None: True, 'true': True, 'false': False},
+    base={'2': bin, '8': oct, '10': str, '16': hex}
+)
+
+
+_field_size_parser = make_parser(
+    'field size/value info',
+    ('positive', 'field size'),
+    ('string?', 'fixed value') # will be parsed later,
+    # once a type has been loaded from this line, according to that type.
+)
+
+
+_field_name_parser = make_parser(
+    'field name',
+    ('string', 'name')
+)
 
 
 def member_field_data(tokens):
     bf, tokens = INVALID_LINE.shift(tokens)
-    bits, fixed = INVALID_BF.pad(bf, 1, 2)
-    bits = integer([bits], 'bit count')
+    bits, fixed = _field_size_parser(bf)
     if fixed is None:
         name, tokens = INVALID_LINE.shift(tokens)
-        name = string(name, 'field name')
+        name = _field_name_parser(name)[0]
     else:
         name = None
     args = field_arguments(tokens)

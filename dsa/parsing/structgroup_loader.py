@@ -1,8 +1,8 @@
 from ..errors import MappingError, UserError
 from ..structs import Struct, StructGroup
 from .file_parsing import SimpleLoader
-from .line_parsing import arguments, TokenError
-from .token_parsing import boolean, hexdump, make_set, one_of, positive_integer, string
+from .line_parsing import argument_parser, TokenError
+from .token_parsing import make_parser
 from collections import OrderedDict
 
 
@@ -51,22 +51,23 @@ class DUPLICATE_GROUP(MappingError):
     """duplicate definition for struct group `{key}`"""
 
 
-def parse_options(line_tokens):
-    return arguments(line_tokens, {
-        'align': (positive_integer, 1),
-        'endian': one_of('big', 'little'),
-        'first': (make_set, None),
-        'count': (positive_integer, None),
-        'terminator': (hexdump, None)
-    })
+_parse_options = argument_parser(
+    {'align': 1, 'first': None, 'count': None, 'terminator': None},
+    align='positive', endian={'big', 'little'},
+    first='{string', count='positive', terminator='hexdump'
+)
+
+
+_parse_struct_options = argument_parser(
+    {'next': None, 'last': False},
+    next='{string', last={'true': True, 'false': False, None: True}
+)
 
 
 def _parse_struct_header(line_tokens):
     name, *flag_tokens = line_tokens # TODO: support for aliases
-    name = string(name, 'struct name')
-    options = arguments(
-        flag_tokens, {'next': (make_set, None), 'last': (boolean, False)}
-    )
+    name = make_parser('struct name', ('string', 'struct name'))(name)[0]
+    options = _parse_struct_options(flag_tokens)
     if options.last:
         NEXT_LAST_CONFLICT.require(options.next is None)
         return name, set()
@@ -105,7 +106,7 @@ class StructData:
         if not fixed: # should be an empty list
             fixed = None # normalize
             name, tokens = NOT_FIXED_OR_NAMED.shift(tokens)
-            name = string(name, 'member name')
+            name = make_parser('member name', ('string', 'member name'))(name)[0]
             if tokens:
                 ref_token, tokens = BAD_MEMBER.shift(tokens)
                 BAD_MEMBER.require(not tokens)
@@ -130,7 +131,7 @@ class StructGroupLoader(SimpleLoader):
 
     def unindented(self, tokens):
         if self._options is None:
-            self._options = parse_options(tokens)
+            self._options = _parse_options(tokens)
         else:
             data = StructData(tokens, self._options.align)
             DUPLICATE_STRUCT.add_unique(self._struct_data, data.name, data)
