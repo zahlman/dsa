@@ -151,9 +151,11 @@ class Pointer:
 
 
 _pointer_size_parser = line_parser(
-    'pointer specification',
+    'pointer section header',
     single_parser('size (in bits)', 'fieldsize'),
-    required=1, more=True
+    # 2 parameters - the `pointer` keyword and name - were handled by
+    # the TypeLoader already.
+    required=1, extracted=2, more=True
 )
 
 
