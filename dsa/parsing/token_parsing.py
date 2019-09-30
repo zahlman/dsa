@@ -143,12 +143,9 @@ def _extract(converters, low, high, name, token):
 
 
 # Separate logic isn't strictly necessary, but it's simpler and faster.
-# As a convenience, we extract the item from the 1-tuple.
 def _extract_one(converter, low, high, name, token):
     _check(low, high, name, token)
-    result = tuple(converter(iter(token)))
-    assert len(result) == 1
-    return result[0]
+    return converter(iter(token))
 
 
 def _make_converter(spec, description):
