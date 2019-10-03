@@ -121,12 +121,12 @@ class Chunk:
     def add_line(self, group_lookup, ats, first, rest):
         # Return whether this is the last line of a group.
         if ats == 2:
-            if not first:
+            if not first and not rest: # terminator.
                 NO_CHUNK_DEFINITION.require(self._group is not None)
                 return True
             group = group_lookup.get(first, None)
             if group is None:
-                trace(f"Warning: unrecognized group name {first}. This will cause an error later if the group is not empty.")
+                trace(f"Warning: unrecognized group name `{first}`. This will cause an error later if the group is not empty.")
                 group = _DummyGroup(first)
             self._set_group(group, rest)
         elif ats == 1:

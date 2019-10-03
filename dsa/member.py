@@ -115,9 +115,9 @@ class ValueLoader:
 
 
 class Pointer:
-    def __init__(self, typename, field):
-        # 'name' stored at Struct level and injected when needed.
+    def __init__(self, typename, filter_specs, field):
         self._typename = typename
+        self._filter_specs = filter_specs
         self._field = field
 
 
@@ -132,7 +132,8 @@ class Pointer:
 
 
     def pointer_value(self, value):
-        return self._field.pointer_value(int.from_bytes(value, 'little'))
+        value = self._field.pointer_value(int.from_bytes(value, 'little'))
+        return None if value is None else (self._filter_specs, value)
 
 
     def format(self, value, lookup):
@@ -165,16 +166,16 @@ class PointerLoader:
         # It will be specified later.
         self._bits, tokens = _pointer_size_parser(tokens)
         self._args = field_arguments(tokens)
-        # TODO: added lines represent filters applied to the pointed-at data.
+        self._filter_specs = []
 
 
     def add_line(self, line_tokens):
-        # TODO
-        pass
+        self._filter_specs.append(line_tokens)
 
 
     def result(self, typename, description_lookup):
         # TODO: create filters from accumulated lines?
         return Pointer(
-            typename, make_field(self._bits, self._args, description_lookup)
+            typename, self._filter_specs,
+            make_field(self._bits, self._args, description_lookup)
         )

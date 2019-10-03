@@ -25,7 +25,7 @@ class MISSING_TERMINATOR_COUNTED(UserError):
 
 
 class NO_MATCH(SequenceError):
-    """invalid source data at 0x{position:X}"""
+    """couldn't match a struct at chunk offset 0x{offset:X}"""
 
 
 class CHUNK_TOO_BIG(UserError):
@@ -78,14 +78,15 @@ class Member:
         return f'Member `{name}` (of type `{typename}`)'
 
 
-    def referent(self, source, position):
-        start = position + self._offset
-        raw = source[start:start+self._implementation.size]
+    def referent(self, get, offset):
+        # Add relative offset to beginning of struct.
+        raw = get(offset + self._offset, self._implementation.size)
         target = self._implementation.pointer_value(raw)
         if target is None:
             return None # _implementation was a Value.
         # Assumed to point at something even if that something isn't named.
-        return self._ref_name, target, self._name
+        specs, value = target
+        return self._ref_name, specs, value, self._name
 
 
     def format(self, value, lookup):
@@ -140,18 +141,18 @@ class Struct:
         return zip(self._members, match.groups())
 
 
-    def _referents(self, source, position):
+    def _referents(self, get, offset):
         for member in self._members:
-            candidate = member.referent(source, position)
+            candidate = member.referent(get, offset)
             if candidate is not None:
                 yield candidate
 
 
-    def extract(self, name, source, position):
-        match = self._pattern.match(source, position)
+    def extract(self, name, get, offset):
+        match = self._pattern.match(get(offset, self.size))
         if match is None:
             return None
-        return name, match, tuple(self._referents(source, position)), self.size
+        return name, match, tuple(self._referents(get, offset)), self.size
 
 
     def format(self, match, lookup):
@@ -221,15 +222,15 @@ class StructGroup:
         return None if self.size is None else self.size - count
 
 
-    def _at_end(self, source, position):
+    def _at_end(self, get, offset):
         t = self.terminator
         if t is None:
             return False
-        return t == source[position:position+len(t)]
+        return t == get(offset, len(t))
 
 
-    def _candidates(self, source, position, previous, count):
-        if self._at_end(source, position):
+    def _candidates(self, get, offset, previous, count):
+        if self._at_end(get, offset):
             # N.B. If there are `last` structs in the group and we didn't
             # reach one, this is *not* considered an error.
             result = set()
@@ -255,16 +256,16 @@ class StructGroup:
         return result
 
 
-    def extract(self, source, position, previous, count):
-        candidates = self._candidates(source, position, previous, count)
+    def extract(self, get, offset, previous, count):
+        candidates = self._candidates(get, offset, previous, count)
         if not candidates:
             return None
         # name, match, referents, size
         # referents is a list of (group name, location, label_base) tuples
         return NO_MATCH.first_not_none((
-            self.structs[name].extract(name, source, position)
+            self.structs[name].extract(name, get, offset)
             for name in candidates
-        ), position = position)
+        ), offset=offset)
 
 
     def format(self, tag, name, match, lookup):
