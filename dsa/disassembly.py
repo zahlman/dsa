@@ -12,7 +12,7 @@ class _Chunk:
     def __init__(self, group_name, group, tag, view, label):
         self._group_name, self._group = group_name, group
         self._tag, self._view, self._label = tag, view, label
-        self._lines, self._size, self._loaded = [], 0, False
+        self._lines, self._size = None, 0
 
 
     @property # read-only
@@ -30,46 +30,26 @@ class _Chunk:
         return self._group_name
 
 
-    def _match_data(self):
-        previous = None
-        offset = 0
-        extract = self._group.extract
-        for i in count():
-            result = wrap_errors(
-                self._tag, extract, self._view.get, offset, previous, i
-            )
-            if result is None:
-                self._size = offset + self._group.terminator_size
-                break
-            previous, match, referents, size = result
-            offset += size
-            yield previous, match, referents, offset
-
-
     def load(self, register, label_ref):
-        if self._group is None:
-            # Since it's popped from the `_pending` set, it won't be tried again.
-            return
-        for struct_name, match, referents, position in self._match_data():
-            for referent in referents:
-                register(*referent)
-            self._lines.append(self._group.format(
-                f'Struct {struct_name} (at 0x{position:X})',
-                struct_name, match, label_ref
-            ))
-        self._loaded = True
+        if self._group is not None:
+            self._size, self._lines = wrap_errors(
+                self._tag, self._group.load, self._view.get, register, label_ref
+            )
+        # Otherwise, skip this group's loading entirely (it will be popped
+        # from the Disassembler's `.pending` set, and can't be re-added
+        # since `.register` will find the unloaded chunk).
 
 
     def write_to(self, outfile, location):
         self._view.write_params(self._size, outfile)
         name = self._group_name or ''
         output_line(outfile, [f'@@{name}'], [self.label], [f'0x{location:X}'])
-        for line in self._lines:
-            output_line(outfile, *line)
-        if self._loaded:
-            outfile.write(f'@@ #0x{location+self._size:X}\n\n')
-        else:
+        if self._lines is None:
             outfile.write('@@\n\n')
+        else:
+            for line in self._lines:
+                output_line(outfile, *line)
+            outfile.write(f'@@ #0x{location+self._size:X}\n\n')
 
 
 class Disassembler:

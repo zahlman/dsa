@@ -1,6 +1,7 @@
 from .errors import wrap as wrap_errors, SequenceError, UserError
 from .parsing.line_parsing import line_parser
 from .parsing.token_parsing import single_parser
+from itertools import count
 
 
 class UNRECOGNIZED_FOLLOWERS(UserError):
@@ -165,3 +166,22 @@ class StructGroup:
             return self.structs[name].size
         except: # Bad struct name? Wait until assembly to report the error.
             return 0
+
+
+    # Get the disassembled lines for a chunk and the corresponding chunk size.
+    def load(self, get, register, label_ref):
+        struct_name = None
+        offset = 0
+        lines = []
+        for i in count():
+            result = self.extract(get, offset, struct_name, i)
+            if result is None:
+                return offset + self.terminator_size, lines
+            struct_name, match, referents, size = result
+            offset += size
+            for referent in referents:
+                register(*referent)
+            lines.append(self.format(
+                f'Struct {struct_name} (at 0x{offset:X})',
+                struct_name, match, label_ref
+            ))
