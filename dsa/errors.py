@@ -50,4 +50,6 @@ def wrap(tag, action, *args, **kwargs):
     try:
         return action(*args, **kwargs)
     except UserError as e:
-        raise e.__class__(f'{tag}: {e}') from e
+        message = str(e).replace('{', '{{').replace('}', '}}')
+        tag = tag.replace('{', '{{').replace('}', '}}')
+        raise e.__class__(f'{tag}: {message}') from e
