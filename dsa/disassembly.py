@@ -97,8 +97,9 @@ class Disassembler:
 
     def _next_chunk(self):
         try:
-            position = self._pending.pop()
-        except KeyError:
+            position = min(self._pending)
+            self._pending.remove(position)
+        except ValueError: # empty set, so min() failed before .remove()
             return None
         return position, self._chunks[position]
 
