@@ -86,8 +86,8 @@ class _DummyView:
 
 
     def get(self, offset, size):
-        start = self._location + offset
-        return self._source[start:start+size]
+        source, start = self._source, self._location + offset
+        return source[start:] if size is None else source[start:start+size]
 
 
     def write_params(self, size, outfile):

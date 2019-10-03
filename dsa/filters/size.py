@@ -49,9 +49,12 @@ class View:
 
     # return an [offset:offset+size] slice of the virtual data.
     # The caller promises that `offset` and `size` are nonnegative.
+    # `size` may be None, indicating that the remainder of the data past
+    # `offset` should be returned.
     def get(self, offset, size):
         if self._limit is not None:
-            size = min(size, self._limit - offset)
+            remaining = self._limit - offset
+            size = remaining if size is None else min(size, remaining)
         return self._base_get(offset, size)
 
 
