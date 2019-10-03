@@ -1,5 +1,5 @@
 from ..errors import MappingError, UserError
-import binascii
+import binascii, codecs
 from functools import partial
 
 
@@ -29,6 +29,10 @@ class ILLEGAL_OPTIONAL_VALUE(MappingError):
 
 class INVALID_HEXDUMP(UserError):
     """invalid hex dump for {description}"""
+
+
+class BAD_ENCODING_NAME(UserError):
+    """{description} `{name}` is not a valid string encoding"""
 
 
 # Helper functions that read token parts from the iterator and
@@ -109,6 +113,14 @@ def _hexdump(description, it):
         raise INVALID_HEXDUMP(description=description) from e
 
 
+def _encoding(description, it):
+    name = next(it)
+    try:
+        return codecs.lookup(name)
+    except LookupError:
+        raise BAD_ENCODING_NAME(description=description, name=name) from e
+
+
 def _make_set(converter, it):
     return set(converter(iter((i,))) for i in it)
 
@@ -172,7 +184,8 @@ def _make_converter(spec, description):
         'integer?': (_optional_integer, 0, 1),
         'positive': (_positive_integer, 1, 1),
         'fieldsize': (_multiple_of_8, 1, 1),
-        'hexdump': (_hexdump, 1, 1)
+        'hexdump': (_hexdump, 1, 1),
+        'encoding': (_encoding, 1, 1)
     }[spec]
     return partial(func, description), low, high
 
