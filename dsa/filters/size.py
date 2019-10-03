@@ -59,4 +59,6 @@ class View:
     # data description file. When assembling, those tokens will be passed
     # to `pack`.
     def params(self, size):
-        return (str(size if self._limit is None else min(size, self._limit)),)
+        if self._limit is not None:
+            size = min(size, self._limit)
+        return [[str(size)]]

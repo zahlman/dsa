@@ -269,10 +269,10 @@ class StructGroup:
 
 
     def format(self, tag, name, match, lookup):
-        tokens = wrap_errors(
+        # At least for Python 3.6, the outer parentheses are necessary.
+        return ((name,), *wrap_errors(
             tag, self.structs[name].format, match, lookup
-        )
-        return (name,) + tokens
+        ))
 
 
     def parse(self, tokens, count, previous):

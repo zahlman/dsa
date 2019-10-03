@@ -1,5 +1,5 @@
 from .errors import wrap, MappingError, UserError
-from .parsing.line_parsing import format_line, line_parser
+from .parsing.line_parsing import line_parser, output_line
 from .parsing.token_parsing import single_parser
 from .ui.tracing import trace
 from functools import partial
@@ -110,9 +110,7 @@ class _ViewChain:
 
 
     def write_params(self, size, outfile):
-        tokens = f'@{self._name}', *self._view.params(size)
-        for wrapped in format_line(tokens):
-            outfile.write(wrapped + '\n')
+        output_line(outfile, [f'@{self._name}'], *self._view.params(size))
         self._next.write_params(size, outfile)
 
 

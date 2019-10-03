@@ -1,5 +1,5 @@
 from .errors import wrap as wrap_errors, UserError
-from .parsing.line_parsing import format_line, wrap_multiword
+from .parsing.line_parsing import output_line
 from .ui.tracing import trace
 from itertools import count
 
@@ -53,25 +53,23 @@ class _Chunk:
         for struct_name, match, referents, position in self._match_data():
             for referent in referents:
                 register(*referent)
-            self._lines.extend(format_line(self._group.format(
+            self._lines.append(self._group.format(
                 f'Struct {struct_name} (at 0x{position:X})',
                 struct_name, match, label_ref
-            )))
+            ))
         self._loaded = True
 
 
     def write_to(self, outfile, location):
-        label = wrap_multiword(self._label)
-        write = outfile.write
         self._view.write_params(self._size, outfile)
         name = self._group_name or ''
-        write(f'@@{name} {label} 0x{location:X}\n')
+        output_line(outfile, [f'@@{name}'], [self.label], [f'0x{location:X}'])
         for line in self._lines:
-            write(f'{line}\n')
+            output_line(outfile, *line)
         if self._loaded:
-            write(f'@@ #0x{location+self._size:X}\n\n')
+            outfile.write(f'@@ #0x{location+self._size:X}\n\n')
         else:
-            write('@@\n\n')
+            outfile.write('@@\n\n')
 
 
 class Disassembler:

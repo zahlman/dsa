@@ -64,7 +64,7 @@ class Value:
 
     def format(self, value, lookup):
         # lookup is irrelevant; we don't have a pointer
-        return ', '.join(
+        return tuple(
             field.format(raw)
             for field, raw in self._raw_values(value)
         )
@@ -143,7 +143,7 @@ class Pointer:
             self._field.format(numeric)
             if self.pointer_value(value) is None
             else lookup(self._field.bias(numeric))
-        )
+        ),
 
 
     def parse(self, items):

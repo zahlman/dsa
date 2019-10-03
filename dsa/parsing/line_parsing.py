@@ -24,6 +24,10 @@ class EMPTY_TOKEN(LineError):
     (N.B. use `0` for empty sets of flags)"""
 
 
+class BAD_TOKEN_PART(UserError):
+    """Can't represent `{text}` as part of a multipart token"""
+
+
 class DUPLICATE_PARAMETER(MappingError):
     """duplicate specification of parameter `{key}`"""
 
@@ -92,20 +96,35 @@ def tokenize(line):
     return result
 
 
-def wrap_multiword(token):
-    return token if token == ''.join(token.split()) else f'[{token}]'
+def _dirty(text):
+    # Check for characters with special meaning for token interpretation.
+    return any(c in text for c in '"[]:,')
+
+
+def _no_whitespace(text):
+    return text == ''.join(text.split()) # no whitespace
+
+
+def _format_token(token):
+    if len(token) == 1:
+        t = token[0]
+        return repr(t) if _dirty(t) else t if _no_whitespace(t) else f'[{t}]'
+    for part in token:
+        BAD_TOKEN_PART.require(not _dirty(part), text=part)
+    return f"[{', '.join(token)}]"
 
 
 # Used as the final step in producing output when disassembling.
-def format_line(tokens):
-    tokens = list(map(wrap_multiword, tokens))
-    return textwrap.wrap(
+def output_line(outfile, *tokens):
+    tokens = list(map(_format_token, tokens))
+    for line in textwrap.wrap(
         ' '.join(tokens), width=78,
         # Indicate the wrapped lines according to spec.
         subsequent_indent=' ' * len(tokens[0]) + ' + ',
         # Ensure that `textwrap` doesn't alter anything important.
         break_long_words=False, break_on_hyphens=False
-    )
+    ):
+        outfile.write(line + '\n')
 
 
 # Parsing functionality used elsewhere.
