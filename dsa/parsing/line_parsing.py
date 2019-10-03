@@ -10,7 +10,7 @@ class LineError(UserError):
         super().__init__(space=space, **kwargs)
 
 
-class UNMATCHED_BRACKET(LineError):
+class UNMATCHED_BRACKET_OR_QUOTE(LineError):
     """Character {position}: unmatched `{bracket}`
     {line}
     {space}^
@@ -40,10 +40,6 @@ class BAD_LINE(UserError):
     """{description} line should have {expected} tokens (has {actual})"""
 
 
-def _normalize(token):
-    return ' '.join(token.split())
-
-
 def token_splitter(delims):
     # Also used by description.FlagsDescription to parse `|`s.
     return re.compile(f'\s*[{re.escape(delims)}]\s*').split
@@ -53,10 +49,20 @@ _split = token_splitter(':,')
 
 
 _tokenizer = re.compile('|'.join((
-    r'(?:(?P<plain>[^\s\[\]]+)\s*)',
+    r'(?:"(?P<doublequoted>(?:[^"\\]|\\.)*)"\s*)',
+    r"(?:'(?P<singlequoted>(?:[^'\\]|\\.)*)'\s*)",
     r'(?:\[(?P<bracketed>[^\[\]]*)\]\s*)',
+    r'(?:(?P<plain>[^\s\[\]]+)\s*)',
     r'(?P<unmatched>.)'
 )))
+
+
+def _literal(text):
+    return [text]
+
+
+def _multipart(text):
+    return _split(' '.join(text.split()))
 
 
 def _clean_token(match, line):
@@ -65,13 +71,18 @@ def _clean_token(match, line):
     groupname = match.lastgroup
     text = match.group(groupname)
     position = match.start()
-    UNMATCHED_BRACKET.require(
+    UNMATCHED_BRACKET_OR_QUOTE.require(
         groupname != 'unmatched',
         position=position, bracket=text, line=line
     )
-    text = _normalize(text)
-    EMPTY_TOKEN.require(bool(text), position=position, line=line)
-    return _split(text)
+    token = {
+        'plain': _multipart,
+        'bracketed': _multipart,
+        'doublequoted': _literal,
+        'singlequoted': _literal
+    }[groupname](text)
+    EMPTY_TOKEN.require(bool(token), position=position, line=line)
+    return token
 
 
 def tokenize(line):
