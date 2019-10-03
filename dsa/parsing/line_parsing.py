@@ -54,7 +54,6 @@ _split = token_splitter(':,')
 
 _tokenizer = re.compile('|'.join((
     r'(?:"(?P<doublequoted>(?:[^"\\]|\\.)*)"\s*)',
-    r"(?:'(?P<singlequoted>(?:[^'\\]|\\.)*)'\s*)",
     r'(?:\[(?P<bracketed>[^\[\]]*)\]\s*)',
     r'(?:(?P<plain>[^\s\[\]]+)\s*)',
     r'(?P<unmatched>.)'
@@ -82,8 +81,7 @@ def _clean_token(match, line):
     token = {
         'plain': _multipart,
         'bracketed': _multipart,
-        'doublequoted': _literal,
-        'singlequoted': _literal
+        'doublequoted': _literal
     }[groupname](text)
     EMPTY_TOKEN.require(bool(token), position=position, line=line)
     return token
