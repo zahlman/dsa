@@ -1,6 +1,6 @@
 from .errors import SequenceError, UserError
-from .field import field_arguments, make_field, member_field_data
-from .parsing.line_parsing import line_parser
+from .field import member_field_data, numeric_field_maker
+from .parsing.line_parsing import argument_parser, line_parser
 from .parsing.token_parsing import single_parser
 
 
@@ -22,6 +22,8 @@ class INVALID_MEMBER_SIZE(UserError):
 
 def _extract(value, offset, size):
     # TODO: handle big-endian here.
+    # TODO: require that text fields are aligned to a byte boundary?
+    # TODO: ensure text fields are aware of being given a big-endian value.
     return (value >> offset) & ((1 << size) - 1)
 
 
@@ -95,8 +97,8 @@ class ValueLoader:
     def result(self, typename, description_lookup):
         position, fixed_mask, fixed_value = 0, 0, 0
         offsets, fields = [], []
-        for name, args, fixed, bits in self.field_data:
-            field = make_field(bits, args, description_lookup)
+        for name, make_field, fixed, bits in self.field_data:
+            field = make_field(description_lookup)
             if fixed is not None:
                 fixed = field.parse(fixed)
                 mask = (1 << bits) - 1
@@ -160,12 +162,20 @@ _pointer_size_parser = line_parser(
 )
 
 
+# like the arguments for a Field, but `encoding` is not allowed.
+_pointer_argument_parser = argument_parser(
+    bias='integer', stride='positive', values='string',
+    signed={None: True, 'true': True, 'false': False},
+    base={'2': bin, '8': oct, '10': str, '16': hex}
+)
+
+
 class PointerLoader:
     def __init__(self, tokens):
         # The typename for the Pointer was already extracted from the `tokens`.
         # It will be specified later.
-        self._bits, tokens = _pointer_size_parser(tokens)
-        self._args = field_arguments(tokens)
+        bits, tokens = _pointer_size_parser(tokens)
+        self._make = numeric_field_maker(_pointer_argument_parser(tokens), bits)
         self._filter_specs = []
 
 
@@ -174,8 +184,6 @@ class PointerLoader:
 
 
     def result(self, typename, description_lookup):
-        # TODO: create filters from accumulated lines?
         return Pointer(
-            typename, self._filter_specs,
-            make_field(self._bits, self._args, description_lookup)
+            typename, self._filter_specs, self._make(description_lookup)
         )

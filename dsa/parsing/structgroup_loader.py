@@ -15,6 +15,10 @@ class BAD_MEMBER(UserError):
     """not enough or too many tokens for member specification"""
 
 
+class MISSING_ENDIAN(MappingError):
+    """`endian` must be specified"""
+
+
 class DUPLICATE_STRUCT(MappingError):
     """duplicate struct definition for {key}"""
 
@@ -32,14 +36,12 @@ class NO_STRUCTS(UserError):
 
 
 _parse_options = argument_parser(
-    {'align': 1, 'first': None, 'count': None, 'terminator': None},
     align='positive', endian={'big', 'little'},
     first='{string', count='positive', terminator='hexdump'
 )
 
 
 _parse_struct_options = argument_parser(
-    {'next': None, 'last': False},
     next='{string', last={'true': True, 'false': False, None: True}
 )
 
@@ -48,15 +50,16 @@ def _parse_struct_header(line_tokens):
     name, *flag_tokens = line_tokens # TODO: support for aliases
     name = single_parser('struct name', 'string')(name)
     options = _parse_struct_options(flag_tokens)
-    if options.last:
-        NEXT_LAST_CONFLICT.require(options.next is None)
+    follower, last = options.get('next', None), options.get('last', False)
+    if last:
+        NEXT_LAST_CONFLICT.require(follower is None)
         return name, set()
     # If nothing is specified, the None value is passed through and will be
     # replaced later with a set of all possibilities.
-    return name, options.next
+    return name, follower
 
 
-_parse_referent = argument_parser({'referent': None}, referent='string')
+_parse_referent = argument_parser(referent='string')
 
 
 class StructData:
@@ -100,9 +103,19 @@ class StructData:
                 single_parser('member name', 'string'),
                 extracted=1, required=1, more=True
             )(tokens)
-            self._data.append(
-                (member, name, None, _parse_referent(tokens).referent)
-            )
+            referent = _parse_referent(tokens).get('referent', None)
+            self._data.append((member, name, None, referent))
+
+
+class Options:
+    """A simple namespace with defaults."""
+    def __init__(self, raw):
+        get = raw.get
+        self.align = get('align', 1)
+        self.first = get('first', None)
+        self.count = get('count', None)
+        self.terminator = get('terminator', None)
+        self.endian = MISSING_ENDIAN.get(raw, 'endian')
 
 
 class StructGroupLoader(SimpleLoader):
@@ -115,7 +128,7 @@ class StructGroupLoader(SimpleLoader):
 
     def unindented(self, tokens):
         if self._options is None:
-            self._options = _parse_options(tokens)
+            self._options = Options(_parse_options(tokens))
         else:
             data = StructData(tokens, self._options.align)
             DUPLICATE_STRUCT.add_unique(self._struct_data, data.name, data)

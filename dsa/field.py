@@ -8,6 +8,18 @@ class UNALIGNED_POINTER(UserError):
     """cannot refer to this address (wrong alignment)"""
 
 
+class TEXT_BYTES(UserError):
+    """Text field size in bits must be a multiple of 8"""
+
+
+class ENCODING_NOT_SOLO(UserError):
+    """`encoding` flag may only appear by itself"""
+
+
+class TOO_MUCH_TEXT(UserError):
+    """encoded text won't fit in field of {size} bytes"""
+
+
 class MISSING_DESCRIPTION(MappingError):
     """unrecognized description name `{key}`"""
 
@@ -55,7 +67,7 @@ class FieldTranslation:
         return value
 
 
-class Field:
+class NumericField:
     def __init__(self, translation, formatter, description):
         self.translation = translation
         self.formatter = formatter
@@ -88,22 +100,67 @@ class Field:
         return result
 
 
-def make_field(bits, args, description_lookup):
-    return Field(
-        FieldTranslation(bits, args.bias, args.stride, args.signed),
-        args.base,
-        Raw if args.values is None else MISSING_DESCRIPTION.get(
-            description_lookup, args.values
-        )
-    )
+class TextField:
+    def __init__(self, encoding, bits):
+        self._encoding = encoding
+        TEXT_BYTES.require(bits % 8 == 0)
+        self._bits = bits
 
 
-field_arguments = argument_parser(
-    {'bias': 0, 'stride': 1, 'signed': False, 'base': hex, 'values': None},
+    @property
+    def size(self):
+        return self._bits
+
+
+    def bias(self, raw):
+        raise NotImplementedError # FIXME
+
+
+    def pointer_value(self, raw):
+        return None
+
+
+    def format(self, raw):
+        # TODO: make stripping optional when disassembling.
+        text = raw.to_bytes(self._bits // 8, 'little').rstrip(b'\x00')
+        result = self._encoding.decode(text)[0]
+        return result
+
+
+    def parse(self, text):
+        value = int.from_bytes(self._encoding.encode(text)[0], 'little')
+        TOO_MUCH_TEXT.require(value < (1 << self._bits), size=(self._bits // 8))
+        return value
+
+
+_field_argument_parser = argument_parser(
     bias='integer', stride='positive', values='string',
+    encoding='encoding',
     signed={None: True, 'true': True, 'false': False},
     base={'2': bin, '8': oct, '10': str, '16': hex}
 )
+
+
+# also used by Member.
+def numeric_field_maker(data, bits):
+    get = data.get
+    translation = FieldTranslation(
+        bits, get('bias', 0), get('stride', 1), get('signed', False)
+    )
+    formatter = get('base', hex)
+    values = get('values', None)
+    return lambda lookup: NumericField(
+        translation, formatter,
+        Raw if values is None else MISSING_DESCRIPTION.get(lookup, values)
+    )
+
+
+def _field_maker(data, bits):
+    if 'encoding' in data:
+        ENCODING_NOT_SOLO.require(len(data) == 1)
+        # ignore the lookup, but still defer creation.
+        return lambda lookup: TextField(data['encoding'], bits)
+    return numeric_field_maker(data, bits)
 
 
 _field_size_parser = line_parser(
@@ -131,6 +188,10 @@ def member_field_data(tokens):
         name, tokens = _field_name_parser(tokens)
     else:
         name = None
-    args = field_arguments(tokens)
+    make_field = _field_maker(_field_argument_parser(tokens), bits)
     # A later pass will parse the `fixed` spec and create the Field.
-    return name, args, fixed, bits
+    # But this can't happen until after the first pass, because the
+    # description lookup needs to be built first.
+    # We also need to report the `bits` size so the Member can assemble
+    # a mask for all the fixed values.
+    return name, make_field, fixed, bits

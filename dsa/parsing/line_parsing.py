@@ -1,7 +1,8 @@
 from ..errors import MappingError, UserError
 from .token_parsing import make_parser, single_parser
+from ast import literal_eval
 from functools import partial
-import re, textwrap
+import re, string, textwrap
 
 
 class LineError(UserError):
@@ -52,8 +53,10 @@ def token_splitter(delims):
 _split = token_splitter(':,')
 
 
+# FIXME: hashes inside quotes
 _tokenizer = re.compile('|'.join((
-    r'(?:"(?P<doublequoted>(?:[^"\\]|\\.)*)"\s*)',
+    r'(?:(?P<doublequoted>"(?:[^"\\]|\\.)*")\s*)',
+    r"(?:(?P<singlequoted>'(?:[^'\\]|\\.)*')\s*)",
     r'(?:\[(?P<bracketed>[^\[\]]*)\]\s*)',
     r'(?:(?P<plain>[^\s\[\]]+)\s*)',
     r'(?P<unmatched>.)'
@@ -61,7 +64,7 @@ _tokenizer = re.compile('|'.join((
 
 
 def _literal(text):
-    return [text]
+    return [literal_eval(text)]
 
 
 def _multipart(text):
@@ -81,7 +84,8 @@ def _clean_token(match, line):
     token = {
         'plain': _multipart,
         'bracketed': _multipart,
-        'doublequoted': _literal
+        'doublequoted': _literal,
+        'singlequoted': _literal,
     }[groupname](text)
     EMPTY_TOKEN.require(bool(token), position=position, line=line)
     return token
@@ -94,19 +98,26 @@ def tokenize(line):
     return result
 
 
+# Don't allow anything that could cause a problem:
+# * control characters
+# * whitespace (not allowed in single-word token)
+# * quotes, square brackets, comma, colon (used for tokenization)
+# * hash (used for file comments)
+# * plus sign (used for line continuation)
+_CLEAN_CHARS = set(string.printable) - set(string.whitespace) - set('\'"[]:,#+')
+
+
 def _dirty(text):
     # Check for characters with special meaning for token interpretation.
-    return any(c in text for c in '"[]:,')
-
-
-def _no_whitespace(text):
-    return text == ''.join(text.split()) # no whitespace
+    return not _CLEAN_CHARS.issuperset(set(text))
 
 
 def _format_token(token):
     if len(token) == 1:
         t = token[0]
-        return repr(t) if _dirty(t) else t if _no_whitespace(t) else f'[{t}]'
+        # New: a single-part token with whitespace can't just be wrapped in
+        # [] because the whitespace may be significant.
+        return repr(t) if _dirty(t) else t
     for part in token:
         BAD_TOKEN_PART.require(not _dirty(part), text=part)
     return f"[{', '.join(token)}]"
@@ -115,56 +126,34 @@ def _format_token(token):
 # Used as the final step in producing output when disassembling.
 def output_line(outfile, *tokens):
     tokens = list(map(_format_token, tokens))
-    for line in textwrap.wrap(
-        ' '.join(tokens), width=78,
-        # Indicate the wrapped lines according to spec.
-        subsequent_indent=' ' * len(tokens[0]) + ' + ',
-        # Ensure that `textwrap` doesn't alter anything important.
-        break_long_words=False, break_on_hyphens=False
-    ):
-        outfile.write(line + '\n')
+    # FIXME: wrap the line when appropriate.
+    # The textwrap module will unavoidably break quoted strings
+    outfile.write(' '.join(tokens) + '\n')
 
 
 # Parsing functionality used elsewhere.
-class Namespace:
-    def __init__(self, items):
-        for key, value in items.items():
-            setattr(self, key, value)
-
-
-def _parse_arguments(expected, defaults, dispatch, tokens):
-    result = defaults.copy() # in case the parser is reused.
-    seen = set()
+def _parse_arguments(dispatch, tokens):
+    result = {}
     for token in tokens:
-        d = dispatch(token)
-        (name, handler), arguments = d
-        DUPLICATE_PARAMETER.require(name not in seen)
-        seen.add(name)
+        (name, handler), arguments = dispatch(token)
+        DUPLICATE_PARAMETER.require(name not in result)
         result[name] = handler(arguments)
-    missing = expected - set(result.keys())
-    MISSING_PARAMETERS.require(not missing, missing=missing)
-    return Namespace(result)
+    return result
 
 
-def argument_parser(defaults, **parameters):
+def argument_parser(**parameters):
     lookup = {
         # Each token can provide a single spec, that will be used
         # to re-parse the token parts after the label.
         name: (name, single_parser(f'`{name}` argument', spec))
         for name, spec in parameters.items()
     }
-    # We make a parser that reads the label and the rest of the tokens,
-    # converting the label into another parser that handles the rest.
-    # Finally we set up code that will invoke the parser and merge its
-    # results with the `defaults`.
-    return partial(_parse_arguments,
-        set(parameters.keys()), defaults,
-        make_parser(
-            'named argument',
-            (lookup, 'argument name'),
-            ('[string', 'argument data')
-        )
+    parser = make_parser(
+        'named argument',
+        (lookup, 'argument name'),
+        ('[string', 'argument data')
     )
+    return partial(_parse_arguments, parser)
 
 
 def _extract_gen(more, parsers, line):
