@@ -1,5 +1,6 @@
 from ..errors import MappingError, UserError
-from ..structs import Struct, StructGroup
+from ..structgroups import StructGroup
+from ..structs import Struct
 from .file_parsing import SimpleLoader
 from .line_parsing import argument_parser, line_parser
 from .token_parsing import make_parser, single_parser
