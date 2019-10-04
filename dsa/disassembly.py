@@ -4,6 +4,10 @@ from .ui.tracing import trace
 from itertools import count
 
 
+class MISALIGNED_CHUNK(UserError):
+    """chunk not aligned to multiple of {alignment} boundary"""
+
+
 class CHUNK_TYPE_CONFLICT(UserError):
     """conflicting requests for parsing data at 0x{where:X}"""
 
@@ -33,7 +37,8 @@ class _Chunk:
     def load(self, register, label_ref):
         if self._group is not None:
             self._size, self._lines = wrap_errors(
-                self._tag, self._group.load, self._view.get, register, label_ref
+                self._tag, self._group.disassemble,
+                self._label, self._view.get, register, label_ref
             )
         # Otherwise, skip this group's loading entirely (it will be popped
         # from the Disassembler's `.pending` set, and can't be re-added
@@ -88,7 +93,8 @@ class Disassembler:
             trace(f'Warning: will skip chunk of unknown type {group_name}')
             tag = None # shouldn't ever attempt to load anyway.
         else:
-            group.check_alignment(start)
+            align = group.alignment
+            MISALIGNED_CHUNK.require(start % align == 0, alignment=align)
             tag = f'Structgroup {group_name} (chunk starting at 0x{start:X})'
         view = self._filter_library.chain(filter_specs, self._source, start)
         return _Chunk(group_name, group, tag, view, label)

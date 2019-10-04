@@ -8,12 +8,22 @@ class UNRECOGNIZED_LABEL(MappingError):
     """unrecognized label `@{key}`"""
 
 
+class UNNAMED_GROUP(UserError):
+    """{name} chunk must be empty, since no chunk format is named"""
+
+
 class LABEL_PARAMS(UserError):
     """chunk-internal label may not have parameters"""
 
 
 class UNCLOSED_CHUNK(UserError):
     """missing `@@` line to close chunk before starting a new one"""
+
+
+# duplicate of disassembly.MISALIGNED_CHUNK.
+# Copying it provides a distinct FQN that is more useful.
+class MISALIGNED_CHUNK(UserError):
+    """chunk not aligned to multiple of {alignment} boundary"""
 
 
 class STRUCT_OUTSIDE_CHUNK(UserError):
@@ -56,19 +66,22 @@ def _resolve_labels(line, label_lookup):
 
 class _DummyGroup:
     """A fake group that works only if the chunk is empty, producing b''."""
-
-
     def __init__(self, name):
         self._name = name
 
 
-    def parse(self, tokens, count, previous):
-        raise UNSUPPORTED_GROUP(name=self._name)
+    @property
+    def alignment(self):
+        return 1 # bare labels can have any alignment.
 
 
-    def parse_end(self, count):
-        assert count == 0 # otherwise parse() should already have raised.
+    def assemble(self, lines):
+        UNNAMED_GROUP.require(not lines, name=self._name)
         return b''
+
+
+    def item_size(self, name):
+        raise UNNAMED_GROUP(name=self._name)
 
 
 _chunk_header_parser = line_parser(
@@ -110,12 +123,14 @@ class Chunk:
         UNCLOSED_CHUNK.require(self._group is None)
         self._group = group
         self._chunk_name, self._location = _chunk_header_parser(params)
+        align = group.alignment
+        MISALIGNED_CHUNK.require(self._location % align == 0, alignment=align)
 
 
     def _add_struct(self, first, rest):
         STRUCT_OUTSIDE_CHUNK.require(self._group is not None)
         self._lines.append(((first,), *rest))
-        self._offset += self._group.struct_size(first)
+        self._offset += self._group.item_size(first)
 
 
     def add_line(self, group_lookup, ats, first, rest):
@@ -139,14 +154,8 @@ class Chunk:
 
 
     def complete(self, pack, label_lookup):
-        previous = None
-        result = bytearray()
-        for i, line in enumerate(self._lines):
-            previous, data = self._group.parse(
-                _resolve_labels(line, label_lookup), i, previous
-            )
-            result.extend(data)
-        result.extend(self._group.parse_end(len(self._lines)))
+        lines = [_resolve_labels(line, label_lookup) for line in self._lines]
+        result = self._group.assemble(lines)
         for name, params in reversed(self._filters):
             result = pack(result, name, params)
         return self._location, bytes(result)

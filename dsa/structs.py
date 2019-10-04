@@ -39,15 +39,14 @@ class Member:
         return f'Member `{name}` (of type `{typename}`)'
 
 
-    def referent(self, get, offset):
+    def referents(self, get, offset, chunk_label):
         # Add relative offset to beginning of struct.
         raw = get(offset + self._offset, self._implementation.size)
         target = self._implementation.pointer_value(raw)
-        if target is None:
-            return None # _implementation was a Value.
-        # Assumed to point at something even if that something isn't named.
-        specs, value = target
-        return self._ref_name, specs, value, self._name
+        if target is not None:
+            # Assumed to point at something even if that something isn't named.
+            specs, value = target
+            yield self._ref_name, specs, value, f'{chunk_label} {self._name}'
 
 
     def format(self, value, lookup):
@@ -102,18 +101,16 @@ class Struct:
         return zip(self._members, match.groups())
 
 
-    def _referents(self, get, offset):
-        for member in self._members:
-            candidate = member.referent(get, offset)
-            if candidate is not None:
-                yield candidate
-
-
-    def extract(self, name, get, offset):
+    def extract(self, name, get, offset, chunk_label):
         match = self._pattern.match(get(offset, self.size))
         if match is None:
             return None
-        return name, match, tuple(self._referents(get, offset)), self.size
+        referents = tuple(
+            r
+            for member in self._members
+            for r in member.referents(get, offset, chunk_label)
+        )
+        return name, match, referents, self.size
 
 
     def format(self, match, lookup):
