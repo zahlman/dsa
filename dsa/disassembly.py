@@ -90,8 +90,10 @@ class Disassembler:
     def _init_chunk(self, group_name, filter_specs, start, label):
         group = self._group_lookup.get(group_name, None)
         if group is None:
-            trace(f'Warning: will skip chunk of unknown type {group_name}')
             tag = None # shouldn't ever attempt to load anyway.
+            if group_name is not None:
+                trace(f'Warning: will skip chunk of unknown type {group_name}')
+            # Otherwise, if there was no name at all, it's just a label.
         else:
             align = group.alignment
             MISALIGNED_CHUNK.require(start % align == 0, alignment=align)

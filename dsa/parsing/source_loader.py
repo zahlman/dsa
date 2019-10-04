@@ -141,8 +141,10 @@ class Chunk:
                 return True
             group = group_lookup.get(first, None)
             if group is None:
-                trace(f"Warning: unrecognized group name `{first}`. This will cause an error later if the group is not empty.")
                 group = _DummyGroup(first)
+                if first:
+                    trace(f'Warning: unrecognized group name `{first}`.')
+                    trace('This will cause an error later if the group is not empty.')
             self._set_group(group, rest)
         elif ats == 1:
             self._add_filter_or_label(first, rest)
