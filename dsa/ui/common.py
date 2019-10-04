@@ -3,7 +3,7 @@ from ..parsing.file_parsing import load_files, load_files_into, load_lines
 from ..parsing.path_loader import PathLoader
 from ..parsing.structgroup_loader import StructGroupLoader
 from ..parsing.type_loader import TypeLoader
-from ..plugins import load_plugins
+from ..plugins import is_function, is_integer, load_plugins
 from .tracing import timed
 from .location import folder, get as get_location
 
@@ -61,11 +61,14 @@ def _load_structgroups(interpreters, types, paths):
 def _load_interpreters(paths):
     method_names = '__init__', 'assemble', 'disassemble', 'item_size'
     property_names = 'alignment',
-    loaded = load_plugins(
-        paths['interpreters'], ('Interpreter', method_names, property_names)
+    return load_plugins(
+        paths['interpreters'], {
+            'alignment': is_integer,
+            'assemble': is_function,
+            'disassemble': is_function,
+            'item_size': is_function
+        }
     )
-    # Instantiate the Interpreter classes.
-    return {name: contents[0]() for name, contents in loaded.items()}
 
 
 @timed('Loading language...')

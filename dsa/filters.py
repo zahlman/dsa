@@ -1,7 +1,7 @@
 from .errors import wrap as wrap_errors, MappingError, UserError
 from .parsing.line_parsing import line_parser, output_line
 from .parsing.token_parsing import single_parser
-from .plugins import load_plugins
+from .plugins import is_class_with, is_function, is_method, load_plugins
 
 
 class UNKNOWN_FILTER(MappingError):
@@ -61,22 +61,22 @@ class _ViewChain:
 class FilterLibrary:
     def __init__(self, paths):
         self._filters = load_plugins(
-            paths, 'pack', ('View', ('__init__', 'get', 'params'), ())
+            paths, {
+                'pack': is_function,
+                'View': (is_class_with, {
+                    'get': is_method, 'params': is_method
+                }),
+            }
         )
 
 
     def view(self, name, base_get, tokens):
-        pack, view = UNKNOWN_FILTER.get(self._filters, name)
-        return VIEW_CREATION_FAILED.convert(
-            Exception, view, base_get, tokens
-        )
+        return UNKNOWN_FILTER.get(self._filters, name).View(base_get, tokens)
 
 
     def pack(self, data, name, tokens):
-        pack, view = UNKNOWN_FILTER.get(self._filters, name)
-        return PACK_FAILED.convert(
-            Exception, wrap_errors, f'Filter `{name}`', pack, data, tokens
-        )
+        module = UNKNOWN_FILTER.get(self._filters, name)
+        return wrap_errors(f'Filter `{name}`', module.pack, data, tokens)
 
 
     def chain(self, specs, source, location):
