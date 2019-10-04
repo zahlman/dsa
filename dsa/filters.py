@@ -1,40 +1,7 @@
-from .errors import wrap, MappingError, UserError
+from .errors import wrap as wrap_errors, MappingError, UserError
 from .parsing.line_parsing import line_parser, output_line
 from .parsing.token_parsing import single_parser
-from .ui.tracing import trace
-from functools import partial
-from importlib.util import spec_from_file_location, module_from_spec
-from inspect import isclass
-import os
-
-
-class AttrError(UserError):
-    @classmethod
-    def get(cls, obj, attr, **kwargs):
-        try:
-            return getattr(obj, attr)
-        except AttributeError:
-            raise cls(attr=attr, **kwargs)
-
-
-class NO_VIEW_IN_MODULE(AttrError):
-    """`{module_name}` module doesn't define a `{attr}` class"""
-
-
-class NO_PACK_IN_MODULE(AttrError):
-    """`{module_name}` module doesn't define a `{attr}` function"""
-
-
-class VIEW_NOT_CLASS(UserError):
-    """`{module_name}.View` is not a class"""
-
-
-class PACK_NOT_CALLABLE(UserError):
-    """`{module_name}.pack` is not callable"""
-
-
-class MISSING_METHOD(AttrError):
-    """`{module_name}.View` doesn't have a method named `{attr}`"""
+from .plugins import load_plugins
 
 
 class UNKNOWN_FILTER(MappingError):
@@ -54,29 +21,6 @@ _spec_parser = line_parser(
     single_parser('name', 'string'),
     more=True
 )
-
-
-def _filter_from_module(module_name, module):
-    cls = NO_VIEW_IN_MODULE.get(module, 'View', module_name=module_name)
-    pack = NO_PACK_IN_MODULE.get(module, 'pack', module_name=module_name)
-    VIEW_NOT_CLASS.require(isclass(cls), module_name=module_name)
-    PACK_NOT_CALLABLE.require(callable(pack), module_name=module_name)
-    for name in ('__init__', 'get', 'params'):
-        method = MISSING_METHOD.get(cls, name, module_name=module_name)
-        MISSING_METHOD.require(
-            callable(method), attr=name, module_name=module_name
-        )
-    return cls, pack
-
-
-def _filter_from_path(path):
-    trace(f"Loading: File '{path}'")
-    folder, filename = os.path.split(path)
-    basename, extension = os.path.splitext(filename)
-    spec = spec_from_file_location(basename, path)
-    module = module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return basename, _filter_from_module(basename, module)
 
 
 class _DummyView:
@@ -116,23 +60,22 @@ class _ViewChain:
 
 class FilterLibrary:
     def __init__(self, paths):
-        self._filters = dict(
-            wrap(path, _filter_from_path, path)
-            for path in paths
+        self._filters = load_plugins(
+            paths, 'pack', ('View', ('__init__', 'get', 'params'), ())
         )
 
 
     def view(self, name, base_get, tokens):
-        cls, pack = UNKNOWN_FILTER.get(self._filters, name)
+        pack, view = UNKNOWN_FILTER.get(self._filters, name)
         return VIEW_CREATION_FAILED.convert(
-            Exception, cls, base_get, tokens
+            Exception, view, base_get, tokens
         )
 
 
     def pack(self, data, name, tokens):
-        cls, pack = UNKNOWN_FILTER.get(self._filters, name)
+        pack, view = UNKNOWN_FILTER.get(self._filters, name)
         return PACK_FAILED.convert(
-            Exception, wrap, f'Filter {name}', pack, data, tokens
+            Exception, wrap_errors, f'Filter `{name}`', pack, data, tokens
         )
 
 
