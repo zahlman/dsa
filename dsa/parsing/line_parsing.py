@@ -105,11 +105,22 @@ def tokenize(line):
 # * hash (used for file comments)
 # * plus sign (used for line continuation)
 _CLEAN_CHARS = set(string.printable) - set(string.whitespace) - set('\'"[]:,#+')
+# Inside a bracketed multipart token, quotes are allowed, as well as limited
+# whitespace.
+_CLEAN_WITH_WHITESPACE = set(string.printable) - set('[]:,#+')
 
 
 def _dirty(text):
     # Check for characters with special meaning for token interpretation.
     return not _CLEAN_CHARS.issuperset(set(text))
+
+
+def _clean_part(text):
+    # Whitespace is allowed if it's only to split up words.
+    return (
+        text == ' '.join(text.split()) and
+        _CLEAN_WITH_WHITESPACE.issuperset(set(text))
+    )
 
 
 def _format_token(token):
@@ -119,7 +130,7 @@ def _format_token(token):
         # [] because the whitespace may be significant.
         return repr(t) if _dirty(t) else t
     for part in token:
-        BAD_TOKEN_PART.require(not _dirty(part), text=part)
+        BAD_TOKEN_PART.require(_clean_part(part), text=part)
     return f"[{', '.join(token)}]"
 
 
