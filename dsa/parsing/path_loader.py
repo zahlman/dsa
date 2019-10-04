@@ -22,7 +22,8 @@ class FLOATING_MODULE(UserError):
 _PATH_TYPES = {
     'types': 'txt',
     'structgroups': 'txt',
-    'filters': 'py'
+    'filters': 'py',
+    'interpreters': 'py'
 }
 
 

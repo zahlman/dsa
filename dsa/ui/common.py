@@ -1,8 +1,9 @@
 from ..filters import FilterLibrary
-from ..parsing.file_parsing import load_files, load_files_tagged, load_lines
+from ..parsing.file_parsing import load_files, load_files_into, load_lines
 from ..parsing.path_loader import PathLoader
 from ..parsing.structgroup_loader import StructGroupLoader
 from ..parsing.type_loader import TypeLoader
+from ..plugins import load_plugins
 from .tracing import timed
 from .location import folder, get as get_location
 
@@ -23,6 +24,8 @@ _DEFAULT_PATHS = [
     'structgroups structgroups',
     '    **',
     'filters filters',
+    '    **',
+    'interpreters interpreters',
     '    **'
 ]
 
@@ -48,13 +51,27 @@ def _load_types(paths):
 
 
 @timed('Loading structgroups...')
-def _load_structgroups(types, paths):
-    return load_files_tagged(paths['structgroups'], StructGroupLoader, types)
+def _load_structgroups(interpreters, types, paths):
+    load_files_into(
+        interpreters, paths['structgroups'], StructGroupLoader, types
+    )
+
+
+@timed('Loading interpreters...')
+def _load_interpreters(paths):
+    method_names = '__init__', 'assemble', 'disassemble', 'item_size'
+    property_names = 'alignment',
+    loaded = load_plugins(
+        paths['interpreters'], ('Interpreter', method_names, property_names)
+    )
+    # Instantiate the Interpreter classes.
+    return {name: contents[0]() for name, contents in loaded.items()}
 
 
 @timed('Loading language...')
 def load_language(pathfile):
     paths = _load_paths(pathfile)
-    groups = _load_structgroups(_load_types(paths), paths)
+    interpreters = _load_interpreters(paths)
+    _load_structgroups(interpreters, _load_types(paths), paths)
     filters = _load_filters(paths)
-    return groups, filters
+    return interpreters, filters
