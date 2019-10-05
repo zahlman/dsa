@@ -98,16 +98,16 @@ def tokenize(line):
     return result
 
 
-# Don't allow anything that could cause a problem:
-# * control characters
-# * whitespace (not allowed in single-word token)
-# * quotes, square brackets, comma, colon (used for tokenization)
-# * hash (used for file comments)
-# * plus sign (used for line continuation)
-_CLEAN_CHARS = set(string.printable) - set(string.whitespace) - set('\'"[]:,#+')
+_SPECIAL = { # characters that can cause problems inside multipart tokens.
+    '[', ']', # used to wrap multipart tokens
+    ':', ',', # used to separate parts
+    '#', '+' # comments and line continuations
+}
 # Inside a bracketed multipart token, quotes are allowed, as well as limited
-# whitespace.
-_CLEAN_WITH_WHITESPACE = set(string.printable) - set('[]:,#+')
+# whitespace (i.e. single spaces not at beginning or end).
+_CLEAN_WITH_WHITESPACE = set(string.printable) - _SPECIAL
+# Inside unquoted single-part tokens, no whitespace or quotes either.
+_CLEAN_CHARS = _CLEAN_WITH_WHITESPACE - set(string.whitespace) - {'"', "'"}
 
 
 def _dirty(text):
@@ -123,7 +123,24 @@ def _clean_part(text):
     )
 
 
-def _format_token(token):
+INDENT = object() # unique object used as a sentinel
+
+
+class Comment:
+    def __init__(self, text):
+        self._text = text
+
+
+    @property
+    def formatted(self):
+        return '# ' + self._text
+
+
+def _format_token(token, compact):
+    if token is INDENT:
+        return '   ' # the fourth space will come from ' '.join.
+    if isinstance(token, Comment):
+        return token.formatted
     if len(token) == 1:
         t = token[0]
         # New: a single-part token with whitespace can't just be wrapped in
@@ -131,12 +148,14 @@ def _format_token(token):
         return repr(t) if _dirty(t) else t
     for part in token:
         BAD_TOKEN_PART.require(_clean_part(part), text=part)
-    return f"[{', '.join(token)}]"
+    joiner = ':' if compact else ', '
+    unwrapped = joiner.join(token)
+    return f'[{unwrapped}]' if ' ' in unwrapped else unwrapped
 
 
 # Used as the final step in producing output when disassembling.
-def output_line(outfile, *tokens):
-    tokens = list(map(_format_token, tokens))
+def output_line(outfile, *tokens, compact=False):
+    tokens = [_format_token(token, compact) for token in tokens]
     # FIXME: wrap the line when appropriate.
     # The textwrap module will unavoidably break quoted strings
     outfile.write(' '.join(tokens) + '\n')
