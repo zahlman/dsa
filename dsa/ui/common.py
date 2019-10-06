@@ -31,15 +31,26 @@ _DEFAULT_PATHS = [
 ]
 
 
+def library():
+    return fix_path(join_path(get_location(), 'library'))
+
+
+def extfile():
+    return join_path(library(), 'libpaths.txt')
+
+
+def roots():
+    with open(extfile()) as f:
+        return [path.strip() for path in f]
+
+
 @timed('Loading definition paths...')
 def _load_paths(pathfile):
-    library = join_path(get_location(), 'library')
-    with open(join_path(library, 'libpaths.txt')) as f:
-        roots = [fix_path(join_path(library, path)) for path in f]
+    fixed_roots = [fix_path(join_path(library(), r)) for r in roots()]
     return (
-        load_lines(_DEFAULT_PATHS, PathLoader, roots, None)
+        load_lines(_DEFAULT_PATHS, PathLoader, fixed_roots, None)
         if pathfile is None
-        else load_files([pathfile], PathLoader, roots, folder(pathfile))
+        else load_files([pathfile], PathLoader, fixed_roots, folder(pathfile))
     )
 
 
