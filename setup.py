@@ -27,7 +27,7 @@ setuptools.setup(
         'Topic :: Software Development :: Assemblers',
         'Topic :: Software Development :: Disassemblers'
     ],
-    package_data={'dsa': ('library/*.*',)},
+    package_data={'dsa': ('library/*.*', 'library/**/*.*')},
     entry_points={
         'console_scripts': [
             'dsa=dsa.ui.dsa:dsa.invoke',
