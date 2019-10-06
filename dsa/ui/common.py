@@ -19,13 +19,13 @@ def get_data(source):
 
 _DEFAULT_PATHS = [
     # Default to including all system modules and nothing user-defined.
-    'types types',
+    'types',
     '    **',
-    'structgroups structgroups',
+    'structgroups',
     '    **',
-    'filters filters',
+    'filters',
     '    **',
-    'interpreters interpreters',
+    'interpreters',
     '    **'
 ]
 
