@@ -32,7 +32,9 @@ setuptools.setup(
         'console_scripts': [
             'dsa=dsa.ui.dsa:dsa.invoke',
             'dsd=dsa.ui.dsd:dsd.invoke',
-            'whereisdsa=dsa.ui.location:display.invoke'
+            'whereisdsa=dsa.ui.location:display.invoke',
+            'dsa-use=dsa.ui.usefiles:use_files.invoke',
+            'dsa-drop=dsa.ui.usefiles:drop_files.invoke'
         ]
     }
 )
