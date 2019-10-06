@@ -1,10 +1,11 @@
 from ..errors import UserError
+from ..ui.tracing import trace
 from .file_parsing import SimpleLoader
 from .line_parsing import line_parser
 from .token_parsing import single_parser
 from functools import partial
 from glob import glob
-import os.path
+from os.path import join as join_path, abspath as fix_path
 
 
 class INNER_STAR(UserError):
@@ -16,7 +17,7 @@ class INNER_DOUBLE_STAR(UserError):
 
 
 class FLOATING_MODULE(UserError):
-    """module path outside of `types`/`structs` block"""
+    """module path outside of path block"""
 
 
 _PATH_TYPES = {
@@ -36,10 +37,10 @@ _section_parser = line_parser(
 
 
 class PathLoader(SimpleLoader):
-    def __init__(self, system_root, config_root):
-        self._root = None
+    def __init__(self, system_roots, config_root):
+        self._roots = None
         self._kind = None
-        self._system_root = system_root
+        self._system_roots = system_roots
         self._config_root = config_root
         self._accumulator = {k: set() for k in _PATH_TYPES.keys()}
 
@@ -47,10 +48,15 @@ class PathLoader(SimpleLoader):
     def unindented(self, tokens):
         kind, root = _section_parser(tokens)
         if root is None:
-            root = os.path.join(self._system_root, kind)
+            roots = [
+                fix_path(join_path(r, kind))
+                for r in self._system_roots
+            ]
         else:
-            root = os.path.join(self._config_root, root)
-        self._root = root
+            roots = [
+                fix_path(join_path(self._config_root, root))
+            ]
+        self._roots = roots
         self._kind = kind
 
 
@@ -70,9 +76,16 @@ class PathLoader(SimpleLoader):
             last = ['**', f'*.{ext}']
         else:
             last = [f'{last}.{ext}']
-        pattern = os.path.join(self._root, *parts, *last)
-        for path in glob(pattern, recursive=True):
-            pathdict.add(os.path.realpath(path))
+        added = False
+        relative_pattern = join_path(*parts, *last)
+        for root in self._roots:
+            pattern = join_path(root, relative_pattern)
+            trace(f'Collecting: {pattern}')
+            for path in glob(pattern, recursive=True):
+                pathdict.add(fix_path(path))
+                added = True
+        if not added:
+            trace(f'Warning: pattern `{relative_pattern}` found no files')
 
 
     def result(self):

@@ -6,6 +6,7 @@ from ..parsing.type_loader import TypeLoader
 from ..plugins import is_function, is_integer, load_plugins
 from .tracing import timed
 from .location import folder, get as get_location
+from os.path import join as join_path, abspath as fix_path
 
 
 """Common loading routines for dsa and dsd."""
@@ -32,11 +33,13 @@ _DEFAULT_PATHS = [
 
 @timed('Loading definition paths...')
 def _load_paths(pathfile):
-    root = get_location()
+    library = join_path(get_location(), 'library')
+    with open(join_path(library, 'libpaths.txt')) as f:
+        roots = [fix_path(join_path(library, path)) for path in f]
     return (
-        load_lines(_DEFAULT_PATHS, PathLoader, root, root)
+        load_lines(_DEFAULT_PATHS, PathLoader, roots, None)
         if pathfile is None
-        else load_files([pathfile], PathLoader, root, folder(pathfile))
+        else load_files([pathfile], PathLoader, roots, folder(pathfile))
     )
 
 
