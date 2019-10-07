@@ -1,0 +1,42 @@
+align:1 endian:little
+
+HEXD
+    hexdump b0
+    hexdump b1
+    hexdump b2
+    hexdump b3
+    hexdump b4
+    hexdump b5
+    hexdump b6
+    hexdump b7
+    hexdump b8
+    hexdump b9
+    hexdump ba
+    hexdump bb
+    hexdump bc
+    hexdump bd
+    hexdump be
+    hexdump bf
+
+HEX8
+    hexdump b0
+    hexdump b1
+    hexdump b2
+    hexdump b3
+    hexdump b4
+    hexdump b5
+    hexdump b6
+    hexdump b7
+
+HEX4
+    hexdump b0
+    hexdump b1
+    hexdump b2
+    hexdump b3
+
+HEX2
+    hexdump b0
+    hexdump b1
+
+HEX1
+    hexdump b0
