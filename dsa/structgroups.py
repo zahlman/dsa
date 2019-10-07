@@ -68,6 +68,11 @@ class StructGroup:
         self._count = options.count # number of structs in the chunk
         self._terminator = options.terminator
         self._graph = _normalized_graph(graph, options.first)
+        self._implicit_end = (
+            self._count is None and
+            self._terminator is None and
+            all(self._graph.values()) # no last-in-chunk structs
+        )
 
 
     @property
@@ -106,6 +111,8 @@ class StructGroup:
 
 
     def _extract(self, get, offset, previous, count, chunk_label):
+        if self._implicit_end and not get(offset, 1):
+            return None # implicitly ended at end of data.
         candidates = self._candidates(get, offset, previous, count)
         if not candidates:
             return None
