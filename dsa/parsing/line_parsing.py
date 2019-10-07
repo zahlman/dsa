@@ -123,7 +123,16 @@ def _clean_part(text):
     )
 
 
-INDENT = object() # unique object used as a sentinel
+class _Indent:
+    def __str__(self):
+        return 'INDENT'
+    
+
+    def __repr__(self):
+        return 'INDENT'
+
+
+INDENT = _Indent() # unique object used as a sentinel
 
 
 class Comment:
