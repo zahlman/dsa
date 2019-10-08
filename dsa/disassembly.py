@@ -98,7 +98,12 @@ class Disassembler:
             align = group.alignment
             MISALIGNED_CHUNK.require(start % align == 0, alignment=align)
             tag = f'Structgroup {group_name} (chunk starting at 0x{start:X})'
-        view = self._filter_library.chain(filter_specs, self._source, start)
+        view = self._filter_library.chain(
+            # reverse the sequence so that the "last" filter to apply is first
+            # in the view chain, getting its data from a prior one etc. until
+            # the "first" filter directly accesses the binary.
+            tuple(reversed(filter_specs)), self._source, start
+        )
         return _Chunk(group_name, group, tag, view, label)
 
 

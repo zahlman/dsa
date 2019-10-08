@@ -54,8 +54,11 @@ class _ViewChain:
 
 
     def write_params(self, size, outfile):
-        output_line(outfile, [f'@{self._name}'], *self._view.params(size))
+        # Since the original list of specs was reversed (for the chaining
+        # algorithm to work properly), the top of the chain is the last
+        # filter to list in the output - so we want pre-order traversal.
         self._next.write_params(size, outfile)
+        output_line(outfile, [f'@{self._name}'], *self._view.params(size))
 
 
 class FilterLibrary:
