@@ -127,10 +127,11 @@ class EnumDescription:
 
 
     def pointer_value(self, value):
-        return FORMAT_FAILED.first_not_none(
-            (r.pointer_value(value) for r in self.ranges),
-            value=value
-        )
+        for r in self.ranges:
+            result = r.pointer_value(value)
+            if result is not None:
+                return result
+        return None # not an error, just no pointer to chase here.
 
 
     def format(self, value, numeric_formatter):
