@@ -56,6 +56,9 @@ def is_class_with(thing):
 is_class = (is_class_with, {})
 
 
+exists = (lambda thing: True, {})
+
+
 def _test(parent, name, children):
     for (attribute_name, (predicate, grandchildren)) in children.items():
         result = MISSING_ATTRIBUTE.get(

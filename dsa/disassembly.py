@@ -13,9 +13,10 @@ class CHUNK_TYPE_CONFLICT(UserError):
 
 
 class _Chunk:
-    def __init__(self, group_name, group, tag, view, label):
+    def __init__(self, group_name, group, tag, unpack_chain, label):
         self._group_name, self._group = group_name, group
-        self._tag, self._view, self._label = tag, view, label
+        self._tag, self._label = tag, label
+        self._data, self._tokens = unpack_chain.data, unpack_chain.tokens
         self._lines, self._size = None, 0
 
 
@@ -38,7 +39,7 @@ class _Chunk:
         if self._group is not None:
             self._size, self._lines = wrap_errors(
                 self._tag, self._group.disassemble,
-                self._label, self._view.get, register, label_ref
+                self._label, self._data, register, label_ref
             )
         # Otherwise, skip this group's loading entirely (it will be popped
         # from the Disassembler's `.pending` set, and can't be re-added
@@ -46,7 +47,8 @@ class _Chunk:
 
 
     def write_to(self, outfile, location):
-        self._view.write_params(self._size, outfile)
+        for line in self._tokens(self._size):
+            output_line(outfile, *line)
         name = self._group_name or ''
         output_line(outfile, [f'@@{name}'], [self.label], [f'0x{location:X}'])
         if self._lines is None:
@@ -98,13 +100,10 @@ class Disassembler:
             align = group.alignment
             MISALIGNED_CHUNK.require(start % align == 0, alignment=align)
             tag = f'Structgroup {group_name} (chunk starting at 0x{start:X})'
-        view = self._filter_library.chain(
-            # reverse the sequence so that the "last" filter to apply is first
-            # in the view chain, getting its data from a prior one etc. until
-            # the "first" filter directly accesses the binary.
-            tuple(reversed(filter_specs)), self._source, start
+        unpack_chain = self._filter_library.unpack_chain(
+            self._source, start, filter_specs
         )
-        return _Chunk(group_name, group, tag, view, label)
+        return _Chunk(group_name, group, tag, unpack_chain, label)
 
 
     def _register(self, group_name, filter_specs, location, label_base):

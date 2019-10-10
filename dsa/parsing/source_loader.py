@@ -95,7 +95,7 @@ _chunk_header_parser = line_parser(
 class Chunk:
     def __init__(self):
         self._location = None
-        self._filters = []
+        self._filters = [] # (name, tokens) filter specs.
         self._group = None
         self._chunk_name = None
         self._lines = []
@@ -155,12 +155,11 @@ class Chunk:
         return False
 
 
-    def complete(self, pack, label_lookup):
+    def complete(self, pack_all, label_lookup):
         lines = [_resolve_labels(line, label_lookup) for line in self._lines]
-        result = self._group.assemble(lines)
-        for name, params in reversed(self._filters):
-            result = pack(result, name, params)
-        return self._location, bytes(result)
+        return self._location, pack_all(
+            self._group.assemble(lines), self._filters
+        )
 
 
 def _process_ats(tokens):
@@ -176,11 +175,11 @@ def _process_ats(tokens):
 
 
 class SourceLoader:
-    def __init__(self, structgroups, filters):
+    def __init__(self, structgroups, filter_library):
         self._chunks = []
         self._current = None # either None or the last of the self._chunks.
         self._group_lookup = structgroups
-        self._pack = filters.pack
+        self._pack_all = filter_library.pack_all
 
 
     def _get_labels(self):
@@ -206,6 +205,6 @@ class SourceLoader:
         processed = {}
         label_lookup = self._get_labels()
         for chunk in self._chunks:
-            key, value = chunk.complete(self._pack, label_lookup)
+            key, value = chunk.complete(self._pack_all, label_lookup)
             DUPLICATE_CHUNK_LOCATION.add_unique(processed, key, value)
         return processed

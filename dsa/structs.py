@@ -39,9 +39,7 @@ class Member:
         return f'Member `{name}` (of type `{typename}`)'
 
 
-    def referents(self, get, offset, chunk_label):
-        # Add relative offset to beginning of struct.
-        raw = get(offset + self._offset, self._implementation.size)
+    def referents(self, raw, chunk_label):
         target = self._implementation.pointer_value(raw)
         if target is not None:
             # Assumed to point at something even if that something isn't named.
@@ -101,14 +99,14 @@ class Struct:
         return zip(self._members, match.groups())
 
 
-    def extract(self, name, get, offset, chunk_label):
-        match = self._pattern.match(get(offset, self.size))
+    def extract(self, name, data, offset, chunk_label):
+        match = self._pattern.match(data, offset)
         if match is None:
             return None
         referents = tuple(
             r
-            for member in self._members
-            for r in member.referents(get, offset, chunk_label)
+            for member, group in self._match_handlers(match)
+            for r in member.referents(group, chunk_label)
         )
         return name, match, referents, self.size
 
@@ -127,5 +125,7 @@ class Struct:
             raw = member.parse(token)
             offset = member.offset
             assert len(raw) == member.size
+            # We overwrite the same set of bytes each time, so there's
+            # no chance of picking up garbage from a previous call.
             self._template[offset:offset+len(raw)] = raw
         return bytes(self._template)

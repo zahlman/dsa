@@ -80,14 +80,14 @@ class StructGroup:
         return self._alignment
 
 
-    def _at_end(self, get, offset):
+    def _at_end(self, data, offset):
         t = self._terminator
-        return False if t is None else (t == get(offset, len(t)))
+        return False if t is None else (t == data[offset:offset+len(t)])
 
 
-    def _candidates(self, get, offset, previous, count):
+    def _candidates(self, data, offset, previous, count):
         unterminated = self._terminator is None
-        if self._at_end(get, offset):
+        if self._at_end(data, offset):
             # N.B. If there are `last` structs in the group and we didn't
             # reach one, this is *not* considered an error.
             result = set()
@@ -110,16 +110,16 @@ class StructGroup:
         return result
 
 
-    def _extract(self, get, offset, previous, count, chunk_label):
-        if self._implicit_end and not get(offset, 1):
+    def _extract(self, data, offset, previous, count, chunk_label):
+        if self._implicit_end and len(data) <= offset:
             return None # implicitly ended at end of data.
-        candidates = self._candidates(get, offset, previous, count)
+        candidates = self._candidates(data, offset, previous, count)
         if not candidates:
             return None
         # name, match, referents, size
         # referents is a list of (group name, location, label_base) tuples
         return NO_MATCH.first_not_none((
-            self._structs[name].extract(name, get, offset, chunk_label)
+            self._structs[name].extract(name, data, offset, chunk_label)
             for name in candidates
         ), offset=offset)
 
@@ -165,12 +165,12 @@ class StructGroup:
 
 
     # Get the disassembled lines for a chunk and the corresponding chunk size.
-    def disassemble(self, chunk_label, get, register, label_ref):
+    def disassemble(self, chunk_label, data, register, label_ref):
         struct_name = None
         offset = 0
         lines = []
         for i in count():
-            result = self._extract(get, offset, struct_name, i, chunk_label)
+            result = self._extract(data, offset, struct_name, i, chunk_label)
             if result is None:
                 total_size = offset
                 if self._terminator is not None:
