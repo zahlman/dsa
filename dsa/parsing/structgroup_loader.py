@@ -11,6 +11,10 @@ class NEXT_LAST_CONFLICT(UserError):
     """`next` and `last` options are mutually exclusive"""
 
 
+class NO_ALIGN(MappingError):
+    """`align` must be specified for structgroup"""
+
+
 class BAD_MEMBER(UserError):
     """not enough or too many tokens for member specification"""
 
@@ -114,7 +118,7 @@ class Options:
     """A simple namespace with defaults."""
     def __init__(self, raw):
         get = raw.get
-        self.align = get('align', 1)
+        self.align = NO_ALIGN.get(raw, 'align')
         self.first = get('first', None)
         self.count = get('count', None)
         self.terminator = get('terminator', None)
