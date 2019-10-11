@@ -5,6 +5,10 @@ from functools import partial
 import re
 
 
+class INVALID_INTERVAL_RANGE(UserError):
+    """bottom of range may not exceed top of range"""
+
+
 class MISSING_PARAMETER(UserError):
     """missing required parameter for labelled range"""
 
@@ -33,55 +37,87 @@ class BAD_DESCRIPTION_HEADER(UserError):
     """extra data not allowed in `enum` or `flags` header"""
 
 
-def _within(low, value, high):
-    if low is not None and value < low:
-        return False
-    if high is not None and value > high:
-        return False
-    return True
+class _Interval:
+    def __init__(self, bottom, top, stride):
+        if stride is None:
+            stride = 1
+        INVALID_INTERVAL_RANGE.require(
+            bottom is None or top is None or bottom <= top
+        )
+        self._baseline = (
+            bottom if bottom is not None
+            else top if top is not None
+            else 0
+        )
+        self._low_index = (
+            None if bottom is None
+            else (bottom - self._baseline) // stride
+        )
+        self._high_index = (
+            None if top is None
+            else (top - self._baseline) // stride
+        )
+        self._stride = stride
+
+
+    @property
+    def definite(self):
+        return self._low_index == self._high_index == self._baseline
+
+
+    def index(self, value):
+        raw, remainder = divmod(value - self._baseline, self._stride)
+        if remainder:
+            return None
+        if self._low_index is not None and raw < self._low_index:
+            return None
+        if self._high_index is not None and raw > self._high_index:
+            return None
+        return raw
+
+
+    def __getitem__(self, index):
+        result = self._baseline + (index * self._stride)
+        PARAMETER_OUT_OF_RANGE.require(result in self)
+        return result
+
+
+    def __contains__(self, value):
+        return self.index(value) is not None
 
 
 class UnlabelledRange:
-    def __init__(self, low, high):
-        self.low, self.high = low, high
+    def __init__(self, interval):
+        self._interval = interval
 
 
     def pointer_value(self, value):
-        return value if _within(self.low, value, self.high) else None
+        return value if value in self._interval else None
 
 
     def format(self, value, convert):
-        return convert(value) if _within(self.low, value, self.high) else None
+        return convert(value) if value in self._interval else None
 
 
     def parse(self, text):
         try:
             value = int(text, 0)
-            return value if self.low <= value <= self.high else None
         except ValueError:
             return None # might be matched by a LabelledRange!
+        else:
+            return value if value in self._interval else None
 
 
 _labelled_range_parameter = single_parser('labelled range parameter', 'integer')
 
 
 class LabelledRange:
-    def __init__(self, low, high, label):
-        self.low, self.high = low, high
-        self.label = label
-        self.pattern = re.compile(
+    def __init__(self, interval, label):
+        self._interval = interval
+        self._label = label
+        self._pattern = re.compile(
             f'(?:{re.escape(label)})(?:<(.*)>)?$'
         )
-        self.baseline = (
-            low if low is not None
-            else high if high is not None
-            else 0
-        )
-
-
-    @property
-    def definite(self):
-        return self.low == self.high and self.low is not None
 
 
     def pointer_value(self, value):
@@ -90,15 +126,16 @@ class LabelledRange:
 
 
     def format(self, value, convert):
+        index = self._interval.index(value)
         return (
-            None if not _within(self.low, value, self.high)
-            else self.label if self.definite
-            else f'{self.label}<{convert(value - self.baseline)}>'
+            None if index is None
+            else self._label if self._interval.definite
+            else f'{self._label}<{convert(index)}>'
         )
 
 
     def _convert_offset(self, param):
-        if self.definite:
+        if self._interval.definite:
             FORBIDDEN_PARAMETER.require(param is None)
             return 0
         else:
@@ -107,27 +144,21 @@ class LabelledRange:
 
 
     def parse(self, text):
-        match = self.pattern.match(text)
+        match = self._pattern.match(text)
         if match is None:
             return None
         # If the regex matched, the text can't match a different range.
-        value = self.baseline + self._convert_offset(match.group(1))
-        PARAMETER_OUT_OF_RANGE.require(_within(self.low, value, self.high))
-        return value
+        index = self._convert_offset(match.group(1))
+        return self._interval[index]
 
 
 class EnumDescription:
     def __init__(self, ranges):
-        self.ranges = [
-            UnlabelledRange(low, high)
-            if label is None
-            else LabelledRange(low, high, label)
-            for low, high, label in ranges
-        ]
+        self._ranges = ranges
 
 
     def pointer_value(self, value):
-        for r in self.ranges:
+        for r in self._ranges:
             result = r.pointer_value(value)
             if result is not None:
                 return result
@@ -136,14 +167,14 @@ class EnumDescription:
 
     def format(self, value, numeric_formatter):
         return FORMAT_FAILED.first_not_none(
-            (r.format(value, numeric_formatter) for r in self.ranges),
+            (r.format(value, numeric_formatter) for r in self._ranges),
             value=value
         )
 
 
     def parse(self, text):
         return PARSE_FAILED.first_not_none(
-            (r.parse(text) for r in self.ranges),
+            (r.parse(text) for r in self._ranges),
             text=text
         )
 
@@ -153,7 +184,7 @@ _flag_splitter = token_splitter('|')
 
 class FlagsDescription:
     def __init__(self, names):
-        self.names = names
+        self._names = names
 
 
     def pointer_value(self, value):
@@ -163,7 +194,7 @@ class FlagsDescription:
 
     def format(self, value, numeric_formatter):
         set_flags = []
-        for i, name in enumerate(self.names):
+        for i, name in enumerate(self._names):
             if value & (1 << i):
                 set_flags.append(name)
         return ' | '.join(set_flags) if set_flags else numeric_formatter(0)
@@ -173,15 +204,12 @@ class FlagsDescription:
         value = 0
         items = _flag_splitter(text)
         set_flags = set(items)
-        # FIXME: check for junk flags etc.
         DUPLICATE_FLAG.require(len(items) == len(set_flags))
-        for i, name in enumerate(self.names):
+        for i, name in enumerate(self._names):
             if name in set_flags:
                 value |= 1 << i
                 set_flags.remove(name)
-        # If there were names left over, this data might still
-        # correspond to a different Description. This happens
-        # in particular when there was only a single name.
+        # FIXME: Is it really not an error if there are leftover set_flags?
         return None if set_flags else value
 
 
@@ -225,9 +253,9 @@ def _parse_range(token):
     # an empty third part.
     if len(token) == 1:
         low = _enum_value_parser(token)
-        return (low, low, 1)
+        return _Interval(low, low, 1)
     else:
-        return _enum_range_parser(token)
+        return _Interval(*_enum_range_parser(token))
 
 
 _enum_description_parser = line_parser(
@@ -243,17 +271,20 @@ class EnumDescriptionLoader:
     """Helper used by TypeDescriptionLoader."""
     def __init__(self, tokens):
         BAD_DESCRIPTION_HEADER.require(not tokens)
-        self.ranges = []
+        self._ranges = []
 
 
     def add_line(self, line_tokens):
-        (low, high, stride), label = _enum_description_parser(line_tokens)
+        interval, label = _enum_description_parser(line_tokens)
         # FIXME: take `stride` into consideration
-        self.ranges.append((low, high, label))
+        self._ranges.append(
+            UnlabelledRange(interval) if label is None
+            else LabelledRange(interval, label)
+        )
 
 
     def result(self):
-        return EnumDescription(self.ranges)
+        return EnumDescription(self._ranges)
 
 
 _flag_name = line_parser(
@@ -267,12 +298,12 @@ class FlagsDescriptionLoader:
     """Helper used by TypeDescriptionLoader."""
     def __init__(self, tokens):
         BAD_DESCRIPTION_HEADER.require(not tokens)
-        self.names = []
+        self._names = []
 
 
     def add_line(self, line_tokens):
-        self.names.append(_flag_name(line_tokens)[0])
+        self._names.append(_flag_name(line_tokens)[0])
 
 
     def result(self):
-        return FlagsDescription(self.names)
+        return FlagsDescription(self._names)
