@@ -202,6 +202,14 @@ class FlagsDescription:
 
     def parse(self, text):
         value = 0
+        # Special case for no flags set.
+        try:
+            zero = int(text, 0)
+        except ValueError:
+            pass
+        else:
+            if zero == 0:
+                return 0
         items = _flag_splitter(text)
         set_flags = set(items)
         DUPLICATE_FLAG.require(len(items) == len(set_flags))
