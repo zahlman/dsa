@@ -12,11 +12,6 @@ _file_name_parser = line_parser(
 )
 
 
-# Intrinsic alignment of the chunk. Offset in the underlying binary data
-# must be a multiple of this value.
-alignment = 1
-
-
 def disassemble(config, chunk_label, data, register, label_ref):
     """Produce formatted file contents for the chunk.
     In this case, we produce a line with a filename, and write the file;

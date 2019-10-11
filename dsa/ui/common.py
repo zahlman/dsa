@@ -77,7 +77,6 @@ def _load_interpreters(paths):
     property_names = 'alignment',
     return load_plugins(
         paths['interpreters'], {
-            'alignment': is_integer,
             'assemble': is_function,
             'disassemble': is_function,
             'item_size': is_function

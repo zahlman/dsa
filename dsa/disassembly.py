@@ -4,10 +4,6 @@ from .ui.tracing import trace
 from itertools import count
 
 
-class MISALIGNED_CHUNK(UserError):
-    """chunk not aligned to multiple of {alignment} boundary"""
-
-
 class CHUNK_TYPE_CONFLICT(UserError):
     """conflicting requests for parsing data at 0x{where:X}"""
 
@@ -156,8 +152,6 @@ class Disassembler:
             trace(f'Warning: will skip chunk of unknown type {group_name}')
             return _DummyChunk(group_args, label)
         # We have a valid group.
-        align = group.alignment
-        MISALIGNED_CHUNK.require(start % align == 0, alignment=align)
         interpreter = _InterpreterWrapper(group_name, group, group_config)
         tag = f'Structgroup {group_name} (chunk starting at 0x{start:X})'
         unpack_chain = self._filter_library.unpack_chain(

@@ -20,12 +20,6 @@ class UNCLOSED_CHUNK(UserError):
     """missing `@@` line to close chunk before starting a new one"""
 
 
-# duplicate of disassembly.MISALIGNED_CHUNK.
-# Copying it provides a distinct FQN that is more useful.
-class MISALIGNED_CHUNK(UserError):
-    """chunk not aligned to multiple of {alignment} boundary"""
-
-
 class STRUCT_OUTSIDE_CHUNK(UserError):
     """struct must be inside a chunk"""
 
@@ -68,11 +62,6 @@ class _DummyGroup:
     """A fake group that works only if the chunk is empty, producing b''."""
     def __init__(self, name):
         self._name = name
-
-
-    @property
-    def alignment(self):
-        return 1 # bare labels can have any alignment.
 
 
     def assemble(self, lines):
@@ -123,8 +112,6 @@ class Chunk:
         UNCLOSED_CHUNK.require(self._group is None)
         self._group = group
         self._chunk_name, self._location = _chunk_header_parser(params)
-        align = group.alignment
-        MISALIGNED_CHUNK.require(self._location % align == 0, alignment=align)
 
 
     def _add_struct(self, first, rest):

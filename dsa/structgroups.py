@@ -55,7 +55,6 @@ def _normalized_graph(graph, first):
 class StructGroup:
     def __init__(self, structs, graph, options):
         self._structs = structs # TODO: optimized dispatch
-        self._alignment = options.align
         self._count = options.count # number of structs, if exact count required
         self._terminator = options.terminator
         self._graph = _normalized_graph(graph, options.first)
@@ -65,11 +64,6 @@ class StructGroup:
         end_methods = int(terminated) + int(has_last) + int(counted)
         CHUNK_END_CONFLICT.require(end_methods <= 1)
         self._expect_termination = terminated or has_last
-
-
-    @property
-    def alignment(self):
-        return self._alignment
 
 
     def _terminator_amount(self, data, loc):
