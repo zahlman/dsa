@@ -62,7 +62,7 @@ class _Interval:
 
     @property
     def definite(self):
-        return self._low_index == self._high_index == self._baseline
+        return self._low_index == self._high_index != None
 
 
     def index(self, value):
