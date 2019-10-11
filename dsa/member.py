@@ -199,7 +199,7 @@ _pointer_size_parser = line_parser(
 
 # Like the arguments for a Field, but with `referent` instead of `encoding`.
 _pointer_argument_parser = argument_parser(
-    bias='integer', stride='positive', values='string',
+    bias='integer', values='string',
     signed={None: True, 'true': True, 'false': False},
     base={'2': bin, '8': oct, '10': str, '16': hex},
     referent='[string'

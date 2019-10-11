@@ -25,10 +25,9 @@ class MISSING_DESCRIPTION(MappingError):
 
 
 class FieldTranslation:
-    def __init__(self, bits, bias, stride, signed):
+    def __init__(self, bits, bias, signed):
         self.bits = bits
         self.bias = bias
-        self.stride = stride
         self.signed = signed
 
 
@@ -52,14 +51,12 @@ class FieldTranslation:
         assert 0 <= raw < self.count
         if self.signed and raw >= self.halfcount:
             raw -= self.count
-        return (raw * self.stride) + self.bias
+        return raw - self.bias
 
 
     # Convert value computed from parsing into one stored in the data.
     def raw(self, value):
-        # Should be guaranteed by the underlying Description(s).
-        value, remainder = divmod(value - self.bias, self.stride)
-        UNALIGNED_POINTER.require(not remainder)
+        value += self.bias
         if self.signed and value < 0:
             assert value >= -self.halfcount
             value += self.count
@@ -134,7 +131,7 @@ class TextField:
 
 
 _field_argument_parser = argument_parser(
-    bias='integer', stride='positive', values='string',
+    bias='integer', values='string',
     encoding='encoding',
     signed={None: True, 'true': True, 'false': False},
     base={'2': bin, '8': oct, '10': str, '16': hex}
@@ -145,7 +142,7 @@ _field_argument_parser = argument_parser(
 def numeric_field_maker(data, bits):
     get = data.get
     translation = FieldTranslation(
-        bits, get('bias', 0), get('stride', 1), get('signed', False)
+        bits, get('bias', 0), get('signed', False)
     )
     formatter = get('base', hex)
     values = get('values', None)
