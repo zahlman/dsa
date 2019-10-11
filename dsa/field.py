@@ -51,12 +51,12 @@ class FieldTranslation:
         assert 0 <= raw < self.count
         if self.signed and raw >= self.halfcount:
             raw -= self.count
-        return raw - self.bias
+        return raw + self.bias
 
 
     # Convert value computed from parsing into one stored in the data.
     def raw(self, value):
-        value += self.bias
+        value -= self.bias
         if self.signed and value < 0:
             assert value >= -self.halfcount
             value += self.count
