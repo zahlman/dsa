@@ -64,8 +64,7 @@ class StructGroup:
     def __init__(self, structs, graph, options):
         self._structs = structs # TODO: optimized dispatch
         self._alignment = options.align
-        self._endian = options.endian # TODO: implement big-endian
-        self._count = options.count # number of structs in the chunk
+        self._count = options.count # number of structs, if exact count required
         self._terminator = options.terminator
         self._graph = _normalized_graph(graph, options.first)
         self._implicit_end = (

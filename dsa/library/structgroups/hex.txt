@@ -1,4 +1,4 @@
-align:1 endian:little
+align:1
 
 HEXD
     hexdump b0

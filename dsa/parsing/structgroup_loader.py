@@ -15,10 +15,6 @@ class BAD_MEMBER(UserError):
     """not enough or too many tokens for member specification"""
 
 
-class MISSING_ENDIAN(MappingError):
-    """`endian` must be specified"""
-
-
 class DUPLICATE_STRUCT(MappingError):
     """duplicate struct definition for {key}"""
 
@@ -36,8 +32,7 @@ class NO_STRUCTS(UserError):
 
 
 _parse_options = argument_parser(
-    align='positive', endian={'big', 'little'},
-    first='{string', count='positive', terminator='hexdump'
+    align='positive', first='{string', count='positive', terminator='hexdump'
 )
 
 
@@ -123,7 +118,6 @@ class Options:
         self.first = get('first', None)
         self.count = get('count', None)
         self.terminator = get('terminator', None)
-        self.endian = MISSING_ENDIAN.get(raw, 'endian')
 
 
 class StructGroupLoader(SimpleLoader):
