@@ -17,14 +17,17 @@ _file_name_parser = line_parser(
 alignment = 1
 
 
-def disassemble(chunk_label, data, register, label_ref):
+def disassemble(config, chunk_label, data, register, label_ref):
     """Produce formatted file contents for the chunk.
     In this case, we produce a line with a filename, and write the file;
     we ignore the `register` and `label_ref` callbacks completely since the
     file contents will not be examined for pointers or labels.
-    `get` -> accessor for the underlying chunk data.
+    `config` -> additional parameters specified by the Pointer to the chunk.
+    `chunk_label` -> label that will be applied to the chunk.
+    `data` -> underlying chunk data.
     `register` -> callback to request disassembling another chunk.
     `label_ref` -> callback to retrieve label text for a pointer."""
+    # TODO: use `config` to determine the file extension.
     filename = f'{chunk_label}.dat'
     with open(filename, 'wb') as f:
         f.write(data)

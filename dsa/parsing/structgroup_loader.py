@@ -59,7 +59,14 @@ def _parse_struct_header(line_tokens):
     return name, follower
 
 
-_parse_referent = argument_parser(referent='string')
+_parse_extra_args = argument_parser(
+    # Additional arguments for Pointers and Simple values.
+    # These might not all be valid; the member_maker will sort that out.
+    bias='integer', stride='positive', values='string',
+    encoding='encoding', referent='[string',
+    signed={None: True, 'true': True, 'false': False},
+    base={'2': bin, '8': oct, '10': str, '16': hex}
+)
 
 
 class StructData:
@@ -85,7 +92,7 @@ class StructData:
 
 
     def add_member(self, tokens, types):
-        (member, fixed), tokens = line_parser(
+        (member_maker, fixed_data), tokens = line_parser(
             'struct member',
             make_parser(
                 'typename/fixed data',
@@ -94,17 +101,18 @@ class StructData:
             ),
             required=1, more=True
         )(tokens)
-        if fixed:
-            BAD_MEMBER.require(not tokens)
-            self._data.append((member, None, member.parse(fixed), None))
+        is_fixed = bool(fixed_data)
+        if is_fixed:
+            name = None
         else:
             name, tokens = line_parser(
                 'struct member (without fixed value)',
                 single_parser('member name', 'string'),
                 extracted=1, required=1, more=True
             )(tokens)
-            referent = _parse_referent(tokens).get('referent', None)
-            self._data.append((member, name, None, referent))
+        member = member_maker(_parse_extra_args(tokens))
+        fixed = member.parse(fixed_data) if is_fixed else None
+        self._data.append((member, name, fixed))
 
 
 class Options:

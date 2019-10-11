@@ -5,10 +5,9 @@ import re
 class Member:
     # Item in a Struct that delegates to either a Value or Pointer
     # for parsing and formatting.
-    def __init__(self, implementation, name, ref_name, offset):
+    def __init__(self, implementation, name, offset):
         self._implementation = implementation # Value or Pointer
         self._name = name
-        self._ref_name = ref_name # name of group at the pointed-at location.
         self._offset = offset # byte offset relative to the containing Struct.
 
 
@@ -40,11 +39,10 @@ class Member:
 
 
     def referents(self, raw, chunk_label):
-        target = self._implementation.pointer_value(raw)
-        if target is not None:
-            # Assumed to point at something even if that something isn't named.
-            specs, value = target
-            yield self._ref_name, specs, value, f'{chunk_label} {self._name}'
+        label = f'{chunk_label} {self._name}'
+        result = self._implementation.pointer_value(raw, label)
+        if result is not None:
+            yield result
 
 
     def format(self, value, lookup):
@@ -67,9 +65,9 @@ def _process_member_data(member_data, alignment):
     template = bytearray()
     members = []
     position = 0
-    for implementation, name, fixed, ref_name in member_data:
+    for implementation, name, fixed in member_data:
         if fixed is None:
-            member = Member(implementation, name, ref_name, len(template))
+            member = Member(implementation, name, len(template))
             members.append(member)
             pattern.extend(member.pattern)
             template.extend(member.template)

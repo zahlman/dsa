@@ -2,6 +2,11 @@ from .errors import SequenceError, UserError
 from .field import member_field_data, numeric_field_maker
 from .parsing.line_parsing import argument_parser, line_parser
 from .parsing.token_parsing import single_parser
+from functools import partial
+
+
+class BAD_SPECS(UserError):
+    """additional type parameter(s) `{keys}` not valid for {kind} member of type `{typename}`"""
 
 
 class BAD_FIXED_VALUE(SequenceError):
@@ -50,7 +55,7 @@ class Value:
         return self._typename # read-only
 
 
-    def pointer_value(self, value):
+    def pointer_value(self, value, label):
         return None # cannot point at anything.
 
 
@@ -84,6 +89,14 @@ class Value:
         return result.to_bytes(self.size, 'little')
 
 
+def _make_value(
+    typename, offsets, fields, fixed_mask, fixed_value, size, member_specs
+):
+    keys = set(member_specs.keys())
+    BAD_SPECS.require(not keys, keys=keys, kind='compound', typename=typename)
+    return Value(typename, offsets, fields, fixed_mask, fixed_value, size)
+
+
 class ValueLoader:
     def __init__(self, tokens):
         BAD_VALUE_HEADER.require(not tokens)
@@ -111,16 +124,19 @@ class ValueLoader:
             position += bits
         size, remainder = divmod(position, 8)
         INVALID_MEMBER_SIZE.require(not remainder)
-        return Value(
+        return partial(
+            _make_value,
             typename, offsets, fields, fixed_mask, fixed_value, size
         )
 
 
 class Pointer:
-    def __init__(self, typename, filter_specs, field):
+    def __init__(self, typename, filter_specs, field, referent_args):
         self._typename = typename
         self._filter_specs = filter_specs
         self._field = field
+        # a list of strings with the referent name and config parameters.
+        self._referent_args = referent_args
 
 
     @property
@@ -133,9 +149,15 @@ class Pointer:
         return self._typename
 
 
-    def pointer_value(self, value):
-        value = self._field.pointer_value(int.from_bytes(value, 'little'))
-        return None if value is None else (self._filter_specs, value)
+    def _pointer_value(self, numeric):
+        return self._field.pointer_value(numeric)
+
+
+    def pointer_value(self, value, label):
+        value = self._pointer_value(int.from_bytes(value, 'little'))
+        return None if value is None else (
+            self._referent_args, self._filter_specs, value, label
+        )
 
 
     def format(self, value, lookup):
@@ -143,7 +165,7 @@ class Pointer:
         # TODO: avoid repeating this check.
         return (
             self._field.format(numeric)
-            if self.pointer_value(value) is None
+            if self._pointer_value(numeric) is None
             else lookup(self._field.bias(numeric))
         ),
 
@@ -151,6 +173,19 @@ class Pointer:
     def parse(self, items):
         INVALID_PARAMETER_COUNT.require(len(items)==1, need=1, got=len(items))
         return self._field.parse(items[0]).to_bytes(self.size, 'little')
+
+
+def _make_pointer(typename, filter_specs, type_specs, lookup, member_specs):
+    params, bits = type_specs
+    params.update(member_specs)
+    field = numeric_field_maker(params, bits)(lookup)
+    BAD_SPECS.require(
+        'encoding' not in params,
+        keys={'encoding'}, kind='pointer', typename=typename
+    )
+    # multipart token: interpreter name + hidden config params
+    referent_name = params.get('referent', None)
+    return Pointer(typename, filter_specs, field, referent_name)
 
 
 _pointer_size_parser = line_parser(
@@ -162,11 +197,12 @@ _pointer_size_parser = line_parser(
 )
 
 
-# like the arguments for a Field, but `encoding` is not allowed.
+# Like the arguments for a Field, but with `referent` instead of `encoding`.
 _pointer_argument_parser = argument_parser(
     bias='integer', stride='positive', values='string',
     signed={None: True, 'true': True, 'false': False},
-    base={'2': bin, '8': oct, '10': str, '16': hex}
+    base={'2': bin, '8': oct, '10': str, '16': hex},
+    referent='[string'
 )
 
 
@@ -175,7 +211,7 @@ class PointerLoader:
         # The typename for the Pointer was already extracted from the `tokens`.
         # It will be specified later.
         bits, tokens = _pointer_size_parser(tokens)
-        self._make = numeric_field_maker(_pointer_argument_parser(tokens), bits)
+        self._specs = _pointer_argument_parser(tokens), bits
         self._filter_specs = []
 
 
@@ -184,6 +220,7 @@ class PointerLoader:
 
 
     def result(self, typename, description_lookup):
-        return Pointer(
-            typename, self._filter_specs, self._make(description_lookup)
+        return partial(
+            _make_pointer,
+            typename, self._filter_specs, self._specs, description_lookup
         )

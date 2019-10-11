@@ -165,7 +165,8 @@ class StructGroup:
 
 
     # Get the disassembled lines for a chunk and the corresponding chunk size.
-    def disassemble(self, chunk_label, data, register, label_ref):
+    def disassemble(self, config, chunk_label, data, register, label_ref):
+        # TODO use `config` to pass in a struct count if applicable.
         struct_name = None
         offset = 0
         lines = []

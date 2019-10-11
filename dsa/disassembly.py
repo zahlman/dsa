@@ -12,9 +12,67 @@ class CHUNK_TYPE_CONFLICT(UserError):
     """conflicting requests for parsing data at 0x{where:X}"""
 
 
+class _InterpreterWrapper:
+    def __init__(self, name, impl, config):
+        self._name, self._impl, self._config = name, impl, config
+
+
+    @property # read-only
+    def name(self):
+        return self._name
+
+
+    @property
+    def args(self):
+        return (self._name, *self._config)
+
+
+    def disassemble(self, label, data, register, label_ref):
+        return self._impl.disassemble(
+            self._config, label, data, register, label_ref
+        )
+
+
+class _DummyChunk:
+    def __init__(self, group_args, label):
+        # We might have "unrecognized" group args that we need to check later.
+        self._group_args = group_args
+        self._label = label
+
+
+    @property # read-only
+    def label(self):
+        return self._label
+
+
+    @property
+    def size(self):
+        return 0
+
+
+    @property # read-only
+    def group_name(self):
+        return '' if self._group_args is None else self._group_args[0]
+
+
+    def match_args(self, args):
+        return args == self._group_args
+
+
+    def load(self, register, label_ref):
+        pass
+
+
+    def write_to(self, outfile, location):
+        name = self.group_name
+        output_line(outfile, [f'@@{name}'], [self.label], [f'0x{location:X}'])
+        outfile.write('@@\n\n')
+
+
 class _Chunk:
-    def __init__(self, group_name, group, tag, unpack_chain, label):
-        self._group_name, self._group = group_name, group
+    def __init__(self, interpreter, tag, unpack_chain, label):
+        assert isinstance(interpreter, _InterpreterWrapper)
+        self._interpreter = interpreter
         self._tag, self._label = tag, label
         self._data, self._tokens = unpack_chain.data, unpack_chain.tokens
         self._lines, self._size = None, 0
@@ -32,31 +90,28 @@ class _Chunk:
 
     @property # read-only
     def group_name(self):
-        return self._group_name
+        return self._interpreter.name
+
+
+    def match_args(self, args):
+        return args == self._interpreter.args
 
 
     def load(self, register, label_ref):
-        if self._group is not None:
-            self._size, self._lines = wrap_errors(
-                self._tag, self._group.disassemble,
-                self._label, self._data, register, label_ref
-            )
-        # Otherwise, skip this group's loading entirely (it will be popped
-        # from the Disassembler's `.pending` set, and can't be re-added
-        # since `.register` will find the unloaded chunk).
+        self._size, self._lines = wrap_errors(
+            self._tag, self._interpreter.disassemble,
+            self._label, self._data, register, label_ref
+        )
 
 
     def write_to(self, outfile, location):
         for line in self._tokens(self._size):
             output_line(outfile, *line)
-        name = self._group_name or ''
+        name = self.group_name
         output_line(outfile, [f'@@{name}'], [self.label], [f'0x{location:X}'])
-        if self._lines is None:
-            outfile.write('@@\n\n')
-        else:
-            for line in self._lines:
-                output_line(outfile, *line)
-            outfile.write(f'@@ #0x{location+self._size:X}\n\n')
+        for line in self._lines:
+            output_line(outfile, *line)
+        outfile.write(f'@@ #0x{location+self._size:X}\n\n')
 
 
 class Disassembler:
@@ -70,7 +125,8 @@ class Disassembler:
         self._chunks = {} # position -> Chunk (disassembled or pending)
         self._pending = set() # positions of pending Chunks
         self._labels = set() # string label names of Chunks
-        self._register(root_group_name, (), root_location, 'main')
+        # For now, no parameters for the root group.
+        self._register((root_group_name,), (), root_location, 'main')
 
 
     def _make_label(self, base):
@@ -89,33 +145,37 @@ class Disassembler:
         return position, self._chunks[position]
 
 
-    def _init_chunk(self, group_name, filter_specs, start, label):
+    def _init_chunk(self, group_args, filter_specs, start, label):
+        if group_args is None: # no referent was specified at all
+            # so we just set up a labelled, empty block.
+            return _DummyChunk(group_args, label)
+        # Otherwise, try to create an interpreter wrapper.
+        group_name, *group_config = group_args
         group = self._group_lookup.get(group_name, None)
         if group is None:
-            tag = None # shouldn't ever attempt to load anyway.
-            if group_name is not None:
-                trace(f'Warning: will skip chunk of unknown type {group_name}')
-            # Otherwise, if there was no name at all, it's just a label.
-        else:
-            align = group.alignment
-            MISALIGNED_CHUNK.require(start % align == 0, alignment=align)
-            tag = f'Structgroup {group_name} (chunk starting at 0x{start:X})'
+            trace(f'Warning: will skip chunk of unknown type {group_name}')
+            return _DummyChunk(group_args, label)
+        # We have a valid group.
+        align = group.alignment
+        MISALIGNED_CHUNK.require(start % align == 0, alignment=align)
+        interpreter = _InterpreterWrapper(group_name, group, group_config)
+        tag = f'Structgroup {group_name} (chunk starting at 0x{start:X})'
         unpack_chain = self._filter_library.unpack_chain(
             self._source, start, filter_specs
         )
-        return _Chunk(group_name, group, tag, unpack_chain, label)
+        return _Chunk(interpreter, tag, unpack_chain, label)
 
 
-    def _register(self, group_name, filter_specs, location, label_base):
+    def _register(self, group_args, filter_specs, location, label_base):
         if location in self._chunks:
             CHUNK_TYPE_CONFLICT.require(
-                group_name == self._chunks[location].group_name,
+                self._chunks[location].match_args(group_args),
                 where=location
             )
         else:
             label = self._make_label(label_base)
             self._chunks[location] = self._init_chunk(
-                group_name, filter_specs, location, label
+                group_args, filter_specs, location, label
             )
             self._pending.add(location)
             self._labels.add(label)
