@@ -9,21 +9,37 @@ from functools import partial
 """Interface to assembler."""
 
 
-# two different diagnostic messages for this,
-# so the decoration is invoked dynamically.
-def _assemble(verbose, infilename, outfilename, groups, filters):
+@timed('Assembling...')
+def assemble(infilename, outfilename, groups, filters):
     chunks = load_files([outfilename], SourceLoader, groups, filters)
     with open(infilename, 'rb') as f:
         data = bytearray(f.read())
     for position, chunk in chunks.items():
-        if verbose:
-            trace(f'Test writing {len(chunk)} bytes at 0x{position:X}')
         data[position:position+len(chunk)] = chunk
     return bytes(data)
 
 
-assemble = timed('Assembling...')(partial(_assemble, False))
-reassemble = timed('Reassembling for verification...')(partial(_assemble, True))
+@timed('Reassembling for verification...')
+def verify_assembly(infilename, outfilename, groups, filters):
+    chunks = load_files([outfilename], SourceLoader, groups, filters)
+    with open(infilename, 'rb') as f:
+        reference = bytearray(f.read())
+    offset = 0
+    ok, overwrite, fail = 0, 0, 0
+    for position, chunk in chunks.items():
+        if position < offset:
+            print('O', end='') # overwrote previous chunk
+            overwrite += 1
+        elif reference[position:position+len(chunk)] != chunk:
+            print('X', end='') # doesn't match existing data
+            fail += 1
+        else:
+            print('.', end='')
+            ok += 1
+        offset = position + len(chunk)
+    print()
+    total = ok + overwrite + fail
+    trace(f'{ok}/{total} OK, {overwrite}/{total} overwrites, {fail}/{total} mismatches')
 
 
 @timed('Writing to output...')

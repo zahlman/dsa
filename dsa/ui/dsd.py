@@ -1,6 +1,6 @@
 from ..disassembly import Disassembler
 from .common import get_data, load_language
-from .dsa import reassemble
+from .dsa import verify_assembly
 from .entrypoint import entry_point, param
 from .tracing import timed, trace
 
@@ -26,6 +26,4 @@ def dsd(binary, root, output, paths, verify=False):
     position = int(position, 0)
     _disassemble(groups, group_name, filters, position, data, output)
     if verify:
-        result = reassemble(binary, output, groups, filters)
-        status = 'OK' if result == data else 'failed'
-        trace(f'Verification: {status}.')
+        verify_assembly(binary, output, groups, filters)
