@@ -14,6 +14,17 @@ class DUPLICATE_SECTION(MappingError):
     """duplicate or conflicting definition for `{section_type} {key}`"""
 
 
+_section_header_parser = line_parser(
+    'section header',
+    single_parser(
+        'type',
+        {'flags', 'enum', 'type', 'pointer'}
+    ),
+    single_parser('name', 'string'),
+    required=2, more=True
+)
+
+
 class TypeLoader(SimpleLoader):
     def __init__(self):
         # Either a DescriptionLoader from self._descriptions
@@ -21,23 +32,15 @@ class TypeLoader(SimpleLoader):
         self._current_datum = None
         self._descriptions = {}
         self._members = {}
-        self._section_header_parser = line_parser(
-            'section header',
-            single_parser(
-                'type',
-                {
-                    # When this value is parsed, "convert" it such that we
-                    # obtain the corresponding loader and storage location,
-                    # but also remember the original text for error reporting.
-                    'flags': ('flags', FlagsDescriptionLoader, self._descriptions),
-                    'enum': ('enum', EnumDescriptionLoader, self._descriptions),
-                    'type': ('type', ValueLoader, self._members),
-                    'pointer': ('pointer', PointerLoader, self._members)
-                }
-            ),
-            single_parser('name', 'string'),
-            required=2, more=True
-        )
+
+
+    def _dispatch(self, name):
+        return {
+            'flags': (FlagsDescriptionLoader, self._descriptions),
+            'enum': (EnumDescriptionLoader, self._descriptions),
+            'type': (ValueLoader, self._members),
+            'pointer': (PointerLoader, self._members)
+        }[name]
 
 
     def indented(self, tokens):
@@ -46,8 +49,8 @@ class TypeLoader(SimpleLoader):
 
 
     def unindented(self, tokens):
-        section, name, flags = self._section_header_parser(tokens)
-        typename, loader, storage = section
+        typename, name, flags = _section_header_parser(tokens)
+        loader, storage = self._dispatch(typename)
         # Set up a new loader and also remember it in the appropriate category.
         self._current_datum = loader(flags)
         DUPLICATE_SECTION.add_unique(
@@ -56,10 +59,10 @@ class TypeLoader(SimpleLoader):
 
 
     def result(self):
-        lookup = {
+        description_lookup = {
             name: lsm.result() for name, lsm in self._descriptions.items()
         }
-        return {
-            name: lsm.result(name, lookup)
+        return description_lookup, {
+            name: lsm.result(name, description_lookup)
             for name, lsm in self._members.items()
         }

@@ -65,9 +65,9 @@ def _load_types(paths):
 
 
 @timed('Loading structgroups...')
-def _load_structgroups(interpreters, types, paths):
+def _load_structgroups(interpreters, enums, types, paths):
     load_files_into(
-        interpreters, paths['structgroups'], StructGroupLoader, types
+        interpreters, paths['structgroups'], StructGroupLoader, enums, types
     )
 
 
@@ -88,6 +88,7 @@ def _load_interpreters(paths):
 def load_language(pathfile):
     paths = _load_paths(pathfile)
     interpreters = _load_interpreters(paths)
-    _load_structgroups(interpreters, _load_types(paths), paths)
+    enums, types = _load_types(paths)
+    _load_structgroups(interpreters, enums, types, paths)
     filters = _load_filters(paths)
     return interpreters, filters

@@ -125,7 +125,8 @@ class Options:
 
 
 class StructGroupLoader(SimpleLoader):
-    def __init__(self, types):
+    def __init__(self, enums, types):
+        self._enums = enums
         self._types = types # type lookup used to create members
         self._struct_name = None
         self._options = None
