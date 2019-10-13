@@ -38,8 +38,8 @@ class Member:
         return f'Member `{name}` (of type `{typename}`)'
 
 
-    def referents(self, raw, chunk_label):
-        label = f'{chunk_label} {self._name}'
+    def referents(self, raw, label):
+        label = f'{self._name}' if label is None else f'{label} {self._name}'
         result = self._implementation.pointer_value(raw, label)
         if result is not None:
             yield result

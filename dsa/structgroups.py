@@ -171,7 +171,10 @@ class StructGroup:
             if not candidates:
                 offset += adjustment
                 break
-            result = self._extract(candidates, data, offset, chunk_label)
+            label = self._label_text(i)
+            if label is not None:
+                lines.append([[f'@{label}']])
+            result = self._extract(candidates, data, offset, label)
             CHUNK_LOADING_FAILED.require(
                 result is not None,
                 reason=self._understand_failure(i)
@@ -179,9 +182,6 @@ class StructGroup:
             struct_name, match, referents, struct_size = result
             for referent in referents:
                 register(*referent)
-            label = self._label_text(i)
-            if label is not None:
-                lines.append([[f'@{label}']])
             lines.append(self._format(
                 f'Struct {struct_name} ({self._progress(i)})',
                 struct_name, match, label_ref
