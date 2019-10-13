@@ -98,68 +98,67 @@ def tokenize(line):
     return result
 
 
-_SPECIAL = { # characters that can cause problems inside multipart tokens.
+_SPECIAL = { # characters that can cause problems inside non-Quoted tokens.
     '[', ']', # used to wrap multipart tokens
     ':', ',', # used to separate parts
-    '#', '+' # comments and line continuations
+    '#' # comments
+    # line continuations (+) don't cause a problem because they won't be at
+    # the start of a line. But they must be wrapped to ensure that.
 }
-# Inside a bracketed multipart token, quotes are allowed, as well as limited
-# whitespace (i.e. single spaces not at beginning or end).
-_CLEAN_WITH_WHITESPACE = set(string.printable) - _SPECIAL
-# Inside unquoted single-part tokens, no whitespace or quotes either.
-_CLEAN_CHARS = _CLEAN_WITH_WHITESPACE - set(string.whitespace) - {'"', "'"}
+# Quotes and whitespace are allowed, but the token will be wrapped
+# and whitespace normalized when parsed back.
+_CLEAN = (set(string.printable) - _SPECIAL).issuperset
+_NEEDS_WRAPPING = {' ', "'", '"', '+'}.intersection
 
 
-def _dirty(text):
-    # Check for characters with special meaning for token interpretation.
-    return not _CLEAN_CHARS.issuperset(set(text))
+class _Token:
+    def __getitem__(self, index):
+        if index != 0:
+            raise IndexError
+        return str(self)
 
 
-def _clean_part(text):
-    # Whitespace is allowed if it's only to split up words.
-    return (
-        text == ' '.join(text.split()) and
-        _CLEAN_WITH_WHITESPACE.issuperset(set(text))
-    )
+    def __len__(self):
+        return 1
 
-
-class _Indent:
-    def __str__(self):
-        return 'INDENT'
-    
 
     def __repr__(self):
-        return 'INDENT'
+        return f'{self.__class__.__name__}({str(self)})'
+
+
+class Quoted(_Token):
+    def __init__(self, text):
+        self._text = text
+
+
+    def __str__(self):
+        return repr(self._text)
+
+
+class _Indent(_Token):
+    def __str__(self):
+        return '   ' # The fourth space comes from line formatting.
 
 
 INDENT = _Indent() # unique object used as a sentinel
 
 
-class Comment:
+class Comment(_Token):
     def __init__(self, text):
         self._text = text
 
 
-    @property
-    def formatted(self):
-        return '# ' + self._text
+    def __str__(self):
+        return f'# {self._text}'
 
 
 def _format_token(token, compact):
-    if token is INDENT:
-        return '   ' # the fourth space will come from ' '.join.
-    if isinstance(token, Comment):
-        return token.formatted
-    if len(token) == 1:
-        t = token[0]
-        # New: a single-part token with whitespace can't just be wrapped in
-        # [] because the whitespace may be significant.
-        return repr(t) if _dirty(t) else t
+    if isinstance(token, _Token):
+        return str(token)
     for part in token:
-        BAD_TOKEN_PART.require(_clean_part(part), text=part)
-    joiner = ':' if compact else ', '
-    unwrapped = joiner.join(token)
-    return f'[{unwrapped}]' if ' ' in unwrapped else unwrapped
+        BAD_TOKEN_PART.require(_CLEAN(part), text=part)
+    joined = (':' if compact else ', ').join(token)
+    return f'[{joined}]' if _NEEDS_WRAPPING(joined) else joined
 
 
 # Used as the final step in producing output when disassembling.
