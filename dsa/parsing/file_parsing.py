@@ -1,7 +1,6 @@
 from ..ui.tracing import trace
 from ..errors import wrap as wrap_errors, MappingError
 from .line_parsing import output_line, tokenize
-from copy import deepcopy
 import os.path
 
 
@@ -10,42 +9,36 @@ class DUPLICATE_FILE(MappingError):
 
 
 def process(lines):
-    position, indent, line = 0, '', ''
-    for i, raw_line in enumerate(lines, 1):
-        raw_line, mark, comment = raw_line.partition('#')
-        raw_line = raw_line.rstrip()
-        if not raw_line:
-            continue
-        contents = raw_line.lstrip()
-        raw_indent = raw_line[:-len(contents)]
-        if contents.startswith('+'):
-            line += contents[1:]
-            continue
-        # If we get here, we have a new "real" line.
-        # As long as we weren't at the start of the file, yield the old line.
-        if line:
-            # TODO: allow custom tokenization.
-            yield position, indent, tokenize(line)
-        else:
-            assert position == 0
-        position, indent, line = i, raw_indent, contents
-    # At EOF, yield the final chunk.
-    yield position, indent, tokenize(line)
+    # New approach: tokenization handles comments and detection of
+    # line continuation and indent tokens; here we just collate lines.
+    # N.B. It now is not allowed to line-wrap in the middle of a token.
+    # Also, we don't just detect indented tokens, but ones starting with '!'.
+    line_number, marker, old_tokens = 0, '', []
+    for i, line in enumerate(lines, 1):
+        start, tokens = tokenize(line)
+        if start == '+': # line continuation.
+            old_tokens.extend(tokens)
+        elif tokens:
+            if old_tokens: # check for start of line
+                yield line_number, marker, old_tokens
+            line_number, marker, old_tokens = i, start, list(tokens)
+    if old_tokens: # in case of empty file
+        yield line_number, marker, old_tokens
 
 
 class SimpleLoader:
-    """A Loader implementation that checks for a single level of indentation."""
     def line(self, indent, tokens):
         """Called repeatedly with lines of the data being loaded."""
-        (self.indented if indent else self.unindented)(tokens)
-
-
-    def result(self):
-        """Do any deferred processing on the loaded data and return an object
-        representing the result.
-        The loader will not be used again after this call, so this method
-        may destroy internal state or return a reference thereto."""
-        raise NotImplemented
+        # Derived classes implement these handlers, as well as a `result`
+        # method to do any deferred processing on the loaded data.
+        # The `result` method may be destructive or return class internals
+        # since the loader will not be used again after that point.
+        if indent == '!':
+            self.meta(tokens)
+        elif indent:
+            self.indented(tokens)
+        else:
+            self.unindented(tokens)
 
 
 def feed(source_name, loader, lines):
