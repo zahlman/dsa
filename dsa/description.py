@@ -29,6 +29,10 @@ class PARSE_FAILED(SequenceError):
     """couldn't parse: `{text}`"""
 
 
+class FLAGS_NOT_ALLOWED(UserError):
+    """an enum is required (not flags) for {purpose}"""
+
+
 class DUPLICATE_FLAG(UserError):
     """duplicate flag names not allowed"""
 
@@ -95,6 +99,10 @@ class UnlabelledRange:
         return value if value in self._interval else None
 
 
+    def label(self, value):
+        return None
+
+
     def format(self, value, convert):
         return convert(value) if value in self._interval else None
 
@@ -123,6 +131,15 @@ class LabelledRange:
     def pointer_value(self, value):
         # A pointer is valid only if the enum would not label it.
         return None
+
+
+    def label(self, value):
+        index = self._interval.index(value)
+        return (
+            None if index is None
+            else self._label if self._interval.definite
+            else None
+        )
 
 
     def format(self, value, convert):
@@ -165,6 +182,14 @@ class EnumDescription:
         return None # not an error, just no pointer to chase here.
 
 
+    def label(self, value):
+        for r in self._ranges:
+            result = r.label(value)
+            if result is not None:
+                return result
+        return None # not an error, just no label for this line.
+
+
     def format(self, value, numeric_formatter):
         return FORMAT_FAILED.first_not_none(
             (r.format(value, numeric_formatter) for r in self._ranges),
@@ -188,8 +213,11 @@ class FlagsDescription:
 
 
     def pointer_value(self, value):
-        raise Exception # FIXME
-        # a Pointer should only be allowed to have an EnumDescription.
+        raise FLAGS_NOT_ALLOWED(purpose='determining pointer validity')
+
+
+    def label(self, value):
+        raise FLAGS_NOT_ALLOWED(purpose='labelling structs in a group')
 
 
     def format(self, value, numeric_formatter):

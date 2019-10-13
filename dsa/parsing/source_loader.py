@@ -36,24 +36,20 @@ class TOO_MANY_ATS(UserError):
     """unrecognized directive; may have at most two @ signs"""
 
 
+class LABEL_CONFLICT(MappingError):
+    """duplicate definition for label `{key}`"""
+
+
 class DUPLICATE_CHUNK_LOCATION(MappingError):
     """duplicate definition for chunk at 0x{key:X}"""
 
 
-def _resolve_labels_sub(subtoken, label_lookup):
-    if not subtoken.startswith('@'):
-        return subtoken
-    label = subtoken[1:]
-    return str(UNRECOGNIZED_LABEL.get(label_lookup, label))
-    # It will get converted back to int later. FIXME this parsing is hax
-
-
 def _resolve_labels(line, label_lookup):
     return [
-        [
-            _resolve_labels_sub(subtoken, label_lookup)
-            for subtoken in token
-        ]
+        (
+            [str(UNRECOGNIZED_LABEL.get(label_lookup, tuple(token)))]
+            if token[0].startswith('@') else token
+        )
         for token in line
     ]
 
@@ -88,14 +84,15 @@ class Chunk:
         self._group = None
         self._chunk_name = None
         self._lines = []
-        self._labels = [] # (name, position) assuming unfiltered.
+        self._labels = [] # (token for label, position) assuming unfiltered.
+        # The token is stored as a tuple since it's used for dict lookup.
         # TODO: ensure filters won't corrupt label info.
         self._offset = 0
 
 
     @property
     def labels(self):
-        return self._chunk_name, self._location, tuple(self._labels)
+        return self._labels
 
 
     def _add_filter_or_label(self, first, rest):
@@ -104,14 +101,17 @@ class Chunk:
             self._filters.append((first, rest))
         else:
             # Afterward, they're group-internal labels.
-            LABEL_PARAMS.require(not params)
-            self._labels.append((name, self._location + self._offset))
+            LABEL_PARAMS.require(not rest)
+            self._labels.append(
+                (('@'+self._chunk_name, first), self._location+self._offset)
+            )
 
 
     def _set_group(self, group, params):
         UNCLOSED_CHUNK.require(self._group is None)
         self._group = group
         self._chunk_name, self._location = _chunk_header_parser(params)
+        self._labels.append((('@'+self._chunk_name,), self._location))
 
 
     def _add_struct(self, first, rest):
@@ -172,9 +172,8 @@ class SourceLoader:
     def _get_labels(self):
         labels = {}
         for chunk in self._chunks:
-            name, location, internal = chunk.labels
-            # TODO: process internal labels.
-            labels[name] = location
+            for token, location in chunk.labels:
+                LABEL_CONFLICT.add_unique(labels, token, location)
         return labels
 
 

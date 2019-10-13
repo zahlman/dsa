@@ -58,6 +58,11 @@ class StructGroup:
         self._count = options.count # number of structs, if exact count required
         self._terminator = options.terminator
         self._graph = _normalized_graph(graph, options.first)
+        self._label_text = (
+            (lambda index: None)
+            if options.labels is None
+            else options.labels.label
+        )
         counted = self._count is not None
         terminated = self._terminator is not None
         has_last = not all(self._graph.values())
@@ -129,12 +134,12 @@ class StructGroup:
         if self._expect_termination:
             return "didn't find a valid terminator sequence or `last` chunk"
         if self._count is None:
-            return "couldn't parse struct #{i}"
-        return "couldn't parse struct {i}/{self._count}"
+            return "couldn't parse struct #{i+1}"
+        return "couldn't parse struct {i+1}/{self._count}"
 
 
     def _progress(self, i):
-        return f'{i}/{self._count}' if self._count is not None else f'#{i}'
+        return f'{i+1}/{self._count}' if self._count is not None else f'#{i+1}'
 
 
     def _candidates(self, data, offset, previous):
@@ -157,9 +162,9 @@ class StructGroup:
         offset = 0
         lines = []
         enumerator = (
-            range(1, self._count+1)
+            range(self._count)
             if self._count is not None
-            else count(1)
+            else count()
         )
         for i in enumerator:
             adjustment, candidates = self._candidates(data, offset, previous)
@@ -174,11 +179,14 @@ class StructGroup:
             struct_name, match, referents, struct_size = result
             for referent in referents:
                 register(*referent)
+            label = self._label_text(i)
+            if label is not None:
+                lines.append([[f'@{label}']])
             lines.append(self._format(
                 f'Struct {struct_name} ({self._progress(i)})',
                 struct_name, match, label_ref
             ))
             offset += struct_size
             previous = struct_name
-        assert self._count in {None, i}
+        assert self._count in {None, i+1}
         return offset, lines

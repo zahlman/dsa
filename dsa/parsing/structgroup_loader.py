@@ -35,11 +35,6 @@ class NO_STRUCTS(UserError):
     """empty struct group definition (no structs)"""
 
 
-_parse_options = argument_parser(
-    align='positive', first='{string', count='positive', terminator='hexdump'
-)
-
-
 _parse_struct_options = argument_parser(
     next='{string', last={'true': True, 'false': False, None: True}
 )
@@ -122,11 +117,12 @@ class Options:
         self.first = get('first', None)
         self.count = get('count', None)
         self.terminator = get('terminator', None)
+        self.labels = get('labels', None)
 
 
 class StructGroupLoader(SimpleLoader):
     def __init__(self, enums, types):
-        self._enums = enums
+        self._enums = enums # used to check `labels` of Options
         self._types = types # type lookup used to create members
         self._struct_name = None
         self._options = None
@@ -135,7 +131,11 @@ class StructGroupLoader(SimpleLoader):
 
     def unindented(self, tokens):
         if self._options is None:
-            self._options = Options(_parse_options(tokens))
+            self._options = Options(argument_parser(
+                align='positive', first='{string',
+                count='positive', terminator='hexdump',
+                labels=self._enums
+            )(tokens))
         else:
             data = StructData(tokens, self._options.align)
             DUPLICATE_STRUCT.add_unique(self._struct_data, data.name, data)
