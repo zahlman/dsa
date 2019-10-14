@@ -173,7 +173,7 @@ class StructGroup:
                 break
             label = self._label_text(i)
             if label is not None:
-                lines.append([[f'@{label}']])
+                lines.append(('', ('@', label)))
             result = self._extract(candidates, data, offset, label)
             CHUNK_LOADING_FAILED.require(
                 result is not None,
