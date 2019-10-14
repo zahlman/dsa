@@ -1,6 +1,6 @@
 from .description import Raw
 from .errors import MappingError, UserError
-from .parsing.line_parsing import Quoted, argument_parser, line_parser
+from .parsing.line_parsing import argument_parser, line_parser
 from .parsing.token_parsing import make_parser, single_parser
 
 
@@ -120,9 +120,7 @@ class TextField:
     def format(self, raw):
         # TODO: make stripping optional when disassembling.
         text = raw.to_bytes(self._bits // 8, 'little').rstrip(b'\x00')
-        # FIXME: the result should end up Quoted, but the containing Value
-        # might have other Fields and make a composite token.
-        # Need a separate member implementation that only holds
+        # FIXME: Need a separate member implementation that only holds
         # a single field and doesn't wrap the format result; and need to
         # enforce that text is only used in such members rather than
         # in complex types.

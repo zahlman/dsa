@@ -2,13 +2,7 @@ from ..errors import MappingError, UserError
 from .token_parsing import make_parser, single_parser
 from ast import literal_eval
 from functools import partial
-import re, string, textwrap
-
-
-class BAD_TOKEN(UserError):
-    """Character {position}: bad token (or unmatched quote/bracket) `{text}`
-    {line}
-    {space}{underline}"""
+import re
 
 
 class MISSING_WHITESPACE(UserError):
@@ -17,20 +11,14 @@ class MISSING_WHITESPACE(UserError):
     {space}{underline}"""
 
 
-class BAD_TOKEN_PART(UserError):
-    """Can't represent `{text}` as part of a multipart token"""
+class BAD_TOKEN(UserError):
+    """Character {position}: bad token (or unmatched quote/bracket) `{text}`
+    {line}
+    {space}{underline}"""
 
 
 class DUPLICATE_PARAMETER(MappingError):
     """duplicate specification of parameter `{key}`"""
-
-
-class UNRECOGNIZED_PARAMETER(MappingError):
-    """unrecognized parameter `{key}`"""
-
-
-class MISSING_PARAMETERS(UserError):
-    """missing required parameters `{missing}`"""
 
 
 class BAD_LINE(UserError):
@@ -132,74 +120,6 @@ def tokenize(line):
     # include the first character if it's special.
     prefix = _linestart.match(line).group()
     return prefix, list(_clean_tokens(line[len(prefix):]))
-
-
-_SPECIAL = { # characters that can cause problems inside non-Quoted tokens.
-    '[', ']', # used to wrap multipart tokens
-    ':', ',', # used to separate parts
-    '#' # comments
-    # line continuations (+) don't cause a problem because they won't be at
-    # the start of a line. But they must be wrapped to ensure that.
-}
-# Quotes and whitespace are allowed, but the token will be wrapped
-# and whitespace normalized when parsed back.
-_CLEAN = (set(string.printable) - _SPECIAL).issuperset
-_NEEDS_WRAPPING = {' ', "'", '"', '+'}.intersection
-
-
-class _Token:
-    def __getitem__(self, index):
-        if index != 0:
-            raise IndexError
-        return str(self)
-
-
-    def __len__(self):
-        return 1
-
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({str(self)})'
-
-
-class Quoted(_Token):
-    def __init__(self, text):
-        self._text = text
-
-
-    def __str__(self):
-        return repr(self._text)
-
-
-class Comment(_Token):
-    def __init__(self, text):
-        self._text = text
-
-
-    def __str__(self):
-        return f'# {self._text}'
-
-
-def _format_token(token, compact):
-    if isinstance(token, _Token):
-        return str(token)
-    # single-part and multipart tokens
-    if not token:
-        # need special handling; wouldn't be detected as needing wrapping
-        return '[]'
-    prefix, token = ('@', token[1:]) if token[0] == '@' else ('', token)
-    for part in token:
-        BAD_TOKEN_PART.require(_CLEAN(part), text=part)
-    joined = (':' if compact else ', ').join(token)
-    return prefix + (f'[{joined}]' if _NEEDS_WRAPPING(joined) else joined)
-
-
-# Used as the final step in producing output when disassembling.
-def output_line(outfile, prefix, *tokens, compact=False):
-    tokens = [_format_token(token, compact) for token in tokens]
-    # FIXME: wrap the line when appropriate.
-    # The textwrap module will unavoidably break quoted strings
-    outfile.write(prefix + ' '.join(tokens) + '\n')
 
 
 # Parsing functionality used elsewhere.

@@ -1,6 +1,6 @@
 from ..ui.tracing import trace
 from ..errors import wrap as wrap_errors, MappingError
-from .line_parsing import output_line, tokenize
+from .line_parsing import tokenize
 import os.path
 
 
@@ -80,10 +80,3 @@ def load_files_tagged(filenames, make_loader, *args, **kwargs):
     result = {}
     load_files_into(filenames, make_loader, *args, **kwargs)
     return result
-
-
-# Simple output routine, mirroring output_line in line_parsing.
-def output_file(filename, lines, compact=False):
-    with open(filename, 'w') as f:
-        for line in lines:
-            output_line(f, *line, compact=compact)

@@ -87,7 +87,7 @@ class StructGroup:
 
     def _format(self, tag, name, match, lookup):
         # At least for Python 3.6, the outer parentheses are necessary.
-        return ((name,), *wrap_errors(
+        return ('', (name,), *wrap_errors(
             tag, self._structs[name].format, match, lookup
         ))
 

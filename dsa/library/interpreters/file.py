@@ -1,4 +1,4 @@
-from dsa.parsing.line_parsing import Quoted, line_parser
+from dsa.parsing.line_parsing import line_parser
 from dsa.parsing.token_parsing import single_parser
 import os
 
@@ -25,8 +25,9 @@ def disassemble(config, chunk_label, data, register, label_ref):
     filename = f'{chunk_label}.dat'
     with open(filename, 'wb') as f:
         f.write(data)
-    # One line with one token that is the filename.
-    return len(data), [[Quoted(filename)]]
+    # One line with an empty prefix and one token that is the filename.
+    # repr() makes this a quoted token that won't be mangled later.
+    return len(data), (('', (repr(filename),)),)
 
 
 def item_size(token):

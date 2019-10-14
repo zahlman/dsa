@@ -1,5 +1,5 @@
 from .errors import wrap as wrap_errors, UserError
-from .parsing.line_parsing import Comment, output_line
+from .output import output_file
 from .ui.tracing import trace
 from itertools import count
 
@@ -30,7 +30,7 @@ class _InterpreterWrapper:
 
 
 def _group_header(label, location, name):
-    return ('!', ('@', label), (f'0x{location:X}',), [name])
+    return ('!', ('@', label), (f'0x{location:X}',), (name,))
 
 
 class _DummyChunk:
@@ -58,11 +58,11 @@ class _DummyChunk:
         pass
 
 
-    def write_to(self, outfile, location):
+    def tokens(self, location):
         name = '' if self._group_args is None else self._group_args[0]
-        output_line(outfile, *_group_header(self._label, location, name))
-        output_line(outfile, '!')
-        output_line(outfile, '')
+        yield _group_header(self._label, location, name)
+        yield ('!',)
+        yield ('',)
 
 
 class _Chunk:
@@ -95,16 +95,13 @@ class _Chunk:
         )
 
 
-    def write_to(self, outfile, location):
-        # Meta-lines for filter chain.
-        for line in self._tokens(self._size):
-            output_line(outfile, *line)
+    def tokens(self, location):
+        yield from self._tokens(self._size) # filters
         name = self._interpreter.name
-        output_line(outfile, *_group_header(self._label, location, name))
-        for line in self._lines:
-            output_line(outfile, '', *line)
-        output_line(outfile, '!', Comment(f'0x{location+self._size:X}'))
-        output_line(outfile, '')
+        yield _group_header(self._label, location, name) # interpreter
+        yield from self._lines # chunk
+        yield ('!', (f'# 0x{location+self._size:X}',))
+        yield ('',)
 
 
 class Disassembler:
@@ -180,13 +177,12 @@ class Disassembler:
         return ('@', self._chunks[location].label)
 
 
-    def _write_to(self, outfile):
+    def _all_tokens(self):
         for location, chunk in sorted(self._chunks.items()):
-            chunk.write_to(outfile, location)
+            yield from chunk.tokens(location)
 
 
     def __call__(self, outfilename):
         for position, chunk in iter(self._next_chunk, None):
             chunk.load(self._register, self._label_ref)
-        with open(outfilename, 'w') as outfile:
-            self._write_to(outfile)
+        output_file(outfilename, self._all_tokens())
