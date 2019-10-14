@@ -7,6 +7,7 @@ import os
 # functionality of a structgroup.
 
 
+_filetype = single_parser('name', 'string?')
 _file_name_token = single_parser('name', 'string')
 _file_name_line = line_parser('filename', _file_name_token, required=1)
 
@@ -21,8 +22,8 @@ def disassemble(config, chunk_label, data, register, label_ref):
     `data` -> underlying chunk data.
     `register` -> callback to request disassembling another chunk.
     `label_ref` -> callback to retrieve label text for a pointer."""
-    # TODO: use `config` to determine the file extension.
-    filename = f'{chunk_label}.dat'
+    extension = _filetype(config) or 'dat'
+    filename = f'{chunk_label}.{extension}'
     with open(filename, 'wb') as f:
         f.write(data)
     # One line with an empty prefix and one token that is the filename.
