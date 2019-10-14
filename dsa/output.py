@@ -58,7 +58,7 @@ def _output_line_tokens(outfile, first, rest, position, compact=False):
 
 
 def _output_line(outfile, prefix, *tokens, compact=False):
-    assert prefix.strip() in {'+', '!', ''}
+    assert isinstance(prefix, str) and prefix.strip() in {'+', '!', ''}
     outfile.write(prefix)
     if tokens:
         first, *rest = tokens
