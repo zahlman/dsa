@@ -42,7 +42,7 @@ class _UnpackChain:
         return self._data
 
 
-    def tokens(self, size):
+    def info(self, size):
         # Data will be packed in the reverse order, so we need to iterate
         # in reverse to propagate the packed sizes. But the resulting list
         # needs to be in the same order as the views, so we prepend.
@@ -54,8 +54,7 @@ class _UnpackChain:
             )
             line.extend(tokens)
             lines.insert(0, line)
-        # FIXME: use `size`.
-        return lines
+        return lines, size
 
 
 # Given a line of filter info from the `pointer` in a type description,

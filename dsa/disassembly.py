@@ -70,7 +70,7 @@ class _Chunk:
         assert isinstance(interpreter, _InterpreterWrapper)
         self._interpreter = interpreter
         self._tag, self._label = tag, label
-        self._data, self._tokens = unpack_chain.data, unpack_chain.tokens
+        self._data, self._filter_info = unpack_chain.data, unpack_chain.info
         self._lines, self._size = None, 0
 
 
@@ -96,11 +96,12 @@ class _Chunk:
 
 
     def tokens(self, location):
-        yield from self._tokens(self._size) # filters
+        lines, size = self._filter_info(self._size)
+        yield from lines # filters
         name = self._interpreter.name
         yield _group_header(self._label, location, name) # interpreter
         yield from self._lines # chunk
-        yield ('!', (f'# 0x{location+self._size:X}',))
+        yield ('!', (f'# 0x{location+size:X}',))
         yield ('',)
 
 
