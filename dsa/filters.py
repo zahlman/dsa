@@ -1,5 +1,5 @@
 from .errors import wrap as wrap_errors, MappingError, UserError
-from .parsing.line_parsing import line_parser, output_line
+from .parsing.line_parsing import line_parser
 from .parsing.token_parsing import single_parser
 from .plugins import exists, is_class_with, is_function, is_method, is_property, load_plugins
 
