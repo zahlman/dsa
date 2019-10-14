@@ -3,6 +3,7 @@ from ..parsing.source_loader import SourceLoader
 from .common import get_data, load_language
 from .entrypoint import entry_point, param
 from .tracing import timed, trace
+from binascii import hexlify
 from functools import partial
 
 
@@ -19,6 +20,17 @@ def assemble(infilename, outfilename, groups, filters):
     return bytes(data)
 
 
+def _dumphex(data):
+    for i in range(0, len(data), 16):
+        hexed = hexlify(data[i:i+16]).upper()
+        bytecount = len(hexed) // 2
+        result = bytearray(bytecount * 3)
+        result[::3] = hexed[::2]
+        result[1::3] = hexed[1::2]
+        result[2::3] = b' ' * bytecount
+        trace(result.decode('ascii'))
+
+
 @timed('Reassembling for verification...')
 def verify_assembly(infilename, outfilename, groups, filters):
     chunks = load_files([outfilename], SourceLoader, groups, filters)
@@ -27,14 +39,18 @@ def verify_assembly(infilename, outfilename, groups, filters):
     offset = 0
     ok, overwrite, fail = 0, 0, 0
     for position, chunk in chunks.items():
+        original = reference[position:position+len(chunk)]
         if position < offset:
-            print('O', end='') # overwrote previous chunk
+            trace(f'OVERWRITE at 0x{position:X}: last ended at 0x{offset:X}')
             overwrite += 1
-        elif reference[position:position+len(chunk)] != chunk:
-            print('X', end='') # doesn't match existing data
+        elif chunk != original:
+            trace(f'MISMATCH at 0x{position:X}: ORIGINAL (')
+            _dumphex(original)
+            trace(f') ASSEMBLED (')
+            _dumphex(chunk)
+            trace(f')')
             fail += 1
         else:
-            print('.', end='')
             ok += 1
         offset = position + len(chunk)
     print()
