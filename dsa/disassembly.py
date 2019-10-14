@@ -1,5 +1,5 @@
 from .errors import wrap as wrap_errors, UserError
-from .parsing.line_parsing import output_line
+from .parsing.line_parsing import Comment, output_line
 from .ui.tracing import trace
 from itertools import count
 
@@ -29,6 +29,10 @@ class _InterpreterWrapper:
         )
 
 
+def _group_header(label, location, name):
+    return ('!', ('@', label), (f'0x{location:X}',), [name])
+
+
 class _DummyChunk:
     def __init__(self, group_args, label):
         # We might have "unrecognized" group args that we need to check later.
@@ -46,11 +50,6 @@ class _DummyChunk:
         return 0
 
 
-    @property # read-only
-    def group_name(self):
-        return '' if self._group_args is None else self._group_args[0]
-
-
     def match_args(self, args):
         return args == self._group_args
 
@@ -60,9 +59,10 @@ class _DummyChunk:
 
 
     def write_to(self, outfile, location):
-        name = self.group_name
-        output_line(outfile, [f'@@{name}'], [self.label], [f'0x{location:X}'])
-        outfile.write('@@\n\n')
+        name = '' if self._group_args is None else self._group_args[0]
+        output_line(outfile, *_group_header(self._label, location, name))
+        output_line(outfile, '!')
+        output_line(outfile, '')
 
 
 class _Chunk:
@@ -84,11 +84,6 @@ class _Chunk:
         return self._size
 
 
-    @property # read-only
-    def group_name(self):
-        return self._interpreter.name
-
-
     def match_args(self, args):
         return args == self._interpreter.args
 
@@ -101,13 +96,15 @@ class _Chunk:
 
 
     def write_to(self, outfile, location):
+        # Meta-lines for filter chain.
         for line in self._tokens(self._size):
             output_line(outfile, *line)
-        name = self.group_name
-        output_line(outfile, [f'@@{name}'], [self.label], [f'0x{location:X}'])
+        name = self._interpreter.name
+        output_line(outfile, *_group_header(self._label, location, name))
         for line in self._lines:
-            output_line(outfile, *line)
-        outfile.write(f'@@ #0x{location+self._size:X}\n\n')
+            output_line(outfile, '', *line)
+        output_line(outfile, '!', Comment(f'0x{location+self._size:X}'))
+        output_line(outfile, '')
 
 
 class Disassembler:
@@ -177,10 +174,10 @@ class Disassembler:
 
     def _label_ref(self, location):
         if location not in self._chunks:
-            return f'0x{location}:X' # i.e., keep a raw value.
+            return (f'0x{location:X}',) # i.e., keep a raw value.
             # FIXME: will bias/stride/etc. mess with this?
         # NULL pointers should have been handled by the referent-getting logic.
-        return f'@{self._chunks[location].label}'
+        return ('@', self._chunks[location].label)
 
 
     def _write_to(self, outfile):

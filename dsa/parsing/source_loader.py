@@ -1,15 +1,16 @@
 from ..errors import MappingError, UserError
 from ..ui.tracing import trace
+from .file_parsing import SimpleLoader
 from .line_parsing import line_parser
-from .token_parsing import single_parser
+from .token_parsing import make_parser, single_parser
 
 
 class UNRECOGNIZED_LABEL(MappingError):
-    """unrecognized label `@{key}`"""
+    """unrecognized label `{key}`"""
 
 
 class UNNAMED_GROUP(UserError):
-    """{name} chunk must be empty, since no chunk format is named"""
+    """{name} chunk contains data and there is no interpreter for it"""
 
 
 class LABEL_PARAMS(UserError):
@@ -17,15 +18,19 @@ class LABEL_PARAMS(UserError):
 
 
 class UNCLOSED_CHUNK(UserError):
-    """missing `@@` line to close chunk before starting a new one"""
+    """missing `!` line to close chunk before starting a new one"""
 
 
-class STRUCT_OUTSIDE_CHUNK(UserError):
-    """struct must be inside a chunk"""
+class OUTSIDE_CHUNK(UserError):
+    """struct/label must be inside a chunk"""
 
 
 class NO_CHUNK_DEFINITION(UserError):
     """chunk has no group/chunk name line"""
+
+
+class BAD_EMPTY_TOKEN(UserError):
+    """empty token not allowed at beginning of line"""
 
 
 class UNSUPPORTED_GROUP(UserError):
@@ -48,7 +53,7 @@ def _resolve_labels(line, label_lookup):
     return [
         (
             [str(UNRECOGNIZED_LABEL.get(label_lookup, tuple(token)))]
-            if token[0].startswith('@') else token
+            if token[0] == '@' else token
         )
         for token in line
     ]
@@ -71,9 +76,25 @@ class _DummyGroup:
 
 _chunk_header_parser = line_parser(
     'chunk info',
-    single_parser('name', 'string'),
+    make_parser('label', ({'@'}, 'at'), ('string', 'name')),
     single_parser('position', 'integer'),
+    # No facility for parameters to the interpreter when assembling.
+    single_parser('interpreter', 'string?'),
     required=2
+)
+
+
+_filter_line_parser = line_parser(
+    'filter info',
+    single_parser('name', 'string'),
+    required=1, more=True
+)
+
+
+_internal_label_parser = line_parser(
+    'chunk-internal label info',
+    make_parser('label', ({'@'}, 'at'), ('string', 'name')),
+    required=1
 )
 
 
@@ -82,7 +103,7 @@ class Chunk:
         self._location = None
         self._filters = [] # (name, tokens) filter specs.
         self._group = None
-        self._chunk_name = None
+        self._chunk_label = None
         self._lines = []
         self._labels = [] # (token for label, position) assuming unfiltered.
         # The token is stored as a tuple since it's used for dict lookup.
@@ -91,55 +112,63 @@ class Chunk:
 
 
     @property
+    def has_group(self):
+        return self._group is not None
+
+
+    @property
     def labels(self):
         return self._labels
 
 
-    def _add_filter_or_label(self, first, rest):
-        if self._group is None:
-            # Before the group identifier, single-@ lines are for filters.
-            self._filters.append((first, rest))
-        else:
-            # Afterward, they're group-internal labels.
-            LABEL_PARAMS.require(not rest)
-            self._labels.append(
-                (('@'+self._chunk_name, first), self._location+self._offset)
-            )
-
-
-    def _set_group(self, group, params):
-        UNCLOSED_CHUNK.require(self._group is None)
+    def _set_group(self, tokens, group_lookup):
+        UNCLOSED_CHUNK.require(not self.has_group)
+        chunk_label, location, group_name = _chunk_header_parser(tokens)
+        group = group_lookup.get(group_name, None)
+        if group is None:
+            group = _DummyGroup(chunk_label[1])
+            if group_name:
+                trace(f'Warning: unrecognized interpreter name `{group_name}`.')
+                trace('This will cause an error later if the chunk has data.')
         self._group = group
-        self._chunk_name, self._location = _chunk_header_parser(params)
-        self._labels.append((('@'+self._chunk_name,), self._location))
+        self._labels.append((chunk_label, location))
+        self._chunk_label, self._location = chunk_label, location
 
 
-    def _add_struct(self, first, rest):
-        STRUCT_OUTSIDE_CHUNK.require(self._group is not None)
-        self._lines.append(((first,), *rest))
-        self._offset += self._group.item_size(first)
+    def _add_filter(self, tokens):
+        name, tokens = _filter_line_parser(tokens)
+        self._filters.append((name, tokens))
 
 
-    def add_line(self, group_lookup, ats, first, rest):
-        # Return whether this is the last line of a group.
-        if ats == 2:
-            if not first and not rest: # terminator.
-                NO_CHUNK_DEFINITION.require(self._group is not None)
-                return True
-            group = group_lookup.get(first, None)
-            if group is None:
-                group = _DummyGroup(first)
-                if first:
-                    trace(f'Warning: unrecognized group name `{first}`.')
-                    trace('This will cause an error later if the group is not empty.')
-            self._set_group(group, rest)
-        elif ats == 1:
-            self._add_filter_or_label(first, rest)
-        elif ats == 0:
-            self._add_struct(first, rest)
+    def add_meta(self, group_lookup, tokens):
+        BAD_EMPTY_TOKEN.require(bool(tokens[0])) # start with empty?
+        if tokens[0][0] == '@':
+            # first token is a label, i.e. group intro.
+            self._set_group(tokens, group_lookup)
         else:
-            raise TOO_MANY_ATS
-        return False
+            self._add_filter(tokens)
+
+
+    def _add_label(self, tokens):
+        [[at, label]] = _internal_label_parser(tokens)
+        self._labels.append(
+            (self._chunk_label + (label,), self._location+self._offset)
+        )
+
+
+    def _add_struct(self, tokens):
+        self._lines.append(tokens)
+        self._offset += self._group.item_size(tokens[0])
+
+
+    def add_line(self, group_lookup, tokens):
+        BAD_EMPTY_TOKEN.require(bool(tokens[0]))
+        # not needed for labels, but disallow them outside the header.
+        OUTSIDE_CHUNK.require(self._group is not None)
+        if tokens[0][0] == '@':
+            self._add_label(tokens)
+        else:
+            self._add_struct(tokens)
 
 
     def complete(self, pack_all, label_lookup):
@@ -149,19 +178,7 @@ class Chunk:
         )
 
 
-def _process_ats(tokens):
-    assert tokens # empty lines were preprocessed out.
-    first, *rest = tokens
-    # TODO: revisit this if/when implicit struct names
-    # are implemented for single-struct groups.
-    first = single_parser('directive or struct name', 'string')(first)
-    size = len(first)
-    first = first.lstrip('@')
-    count = size - len(first)
-    return count, first, rest
-
-
-class SourceLoader:
+class SourceLoader(SimpleLoader):
     def __init__(self, structgroups, filter_library):
         self._chunks = []
         self._current = None # either None or the last of the self._chunks.
@@ -177,14 +194,21 @@ class SourceLoader:
         return labels
 
 
-    def line(self, indent, tokens):
-        # Indentation is irrelevant.
-        count, first, rest = _process_ats(tokens)
+    def meta(self, tokens):
         if self._current is None:
             self._current = Chunk()
             self._chunks.append(self._current)
-        if self._current.add_line(self._group_lookup, count, first, rest):
+        if not tokens: # terminator.
+            NO_CHUNK_DEFINITION.require(self._current.has_group)
             self._current = None
+        else:
+            self._current.add_meta(self._group_lookup, tokens)
+
+
+    def unindented(self, tokens):
+        OUTSIDE_CHUNK.require(self._current is not None)
+        self._current.add_line(self._group_lookup, tokens)
+    indented = unindented # alias; handle both cases the same way
 
 
     def result(self):

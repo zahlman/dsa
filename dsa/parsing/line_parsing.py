@@ -34,7 +34,7 @@ class MISSING_PARAMETERS(UserError):
 
 
 class BAD_LINE(UserError):
-    """{description} line should have {expected} tokens (has {actual})"""
+    """`{description}` line should have {expected} tokens (has {actual})"""
 
 
 def token_splitter(delims):
@@ -171,14 +171,6 @@ class Quoted(_Token):
         return repr(self._text)
 
 
-class _Indent(_Token):
-    def __str__(self):
-        return '   ' # The fourth space comes from line formatting.
-
-
-INDENT = _Indent() # unique object used as a sentinel
-
-
 class Comment(_Token):
     def __init__(self, text):
         self._text = text
@@ -191,18 +183,23 @@ class Comment(_Token):
 def _format_token(token, compact):
     if isinstance(token, _Token):
         return str(token)
+    # single-part and multipart tokens
+    if not token:
+        # need special handling; wouldn't be detected as needing wrapping
+        return '[]'
+    prefix, token = ('@', token[1:]) if token[0] == '@' else ('', token)
     for part in token:
         BAD_TOKEN_PART.require(_CLEAN(part), text=part)
     joined = (':' if compact else ', ').join(token)
-    return f'[{joined}]' if _NEEDS_WRAPPING(joined) else joined
+    return prefix + (f'[{joined}]' if _NEEDS_WRAPPING(joined) else joined)
 
 
 # Used as the final step in producing output when disassembling.
-def output_line(outfile, *tokens, compact=False):
+def output_line(outfile, prefix, *tokens, compact=False):
     tokens = [_format_token(token, compact) for token in tokens]
     # FIXME: wrap the line when appropriate.
     # The textwrap module will unavoidably break quoted strings
-    outfile.write(' '.join(tokens) + '\n')
+    outfile.write(prefix + ' '.join(tokens) + '\n')
 
 
 # Parsing functionality used elsewhere.

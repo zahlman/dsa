@@ -164,10 +164,10 @@ class Pointer:
         numeric = int.from_bytes(value, 'little')
         # TODO: avoid repeating this check.
         return (
-            self._field.format(numeric)
+            (self._field.format(numeric),)
             if self._pointer_value(numeric) is None
             else lookup(self._field.bias(numeric))
-        ),
+        )
 
 
     def parse(self, items):

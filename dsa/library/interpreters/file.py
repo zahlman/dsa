@@ -3,13 +3,12 @@ from dsa.parsing.token_parsing import single_parser
 import os
 
 
-# an interpreter is a module that replaces the parsing and formatting
+# An interpreter is a module that replaces the parsing and formatting
 # functionality of a structgroup.
 
 
-_file_name_parser = line_parser(
-    'filename', single_parser('name', 'string'), required=1
-)
+_file_name_token = single_parser('name', 'string')
+_file_name_line = line_parser('filename', _file_name_token, required=1)
 
 
 def disassemble(config, chunk_label, data, register, label_ref):
@@ -30,11 +29,11 @@ def disassemble(config, chunk_label, data, register, label_ref):
     return len(data), [[Quoted(filename)]]
 
 
-def item_size(name):
+def item_size(token):
     """Determine the amount of bytes corresponding to a chunk line,
-    according to the first token of the line (must be single-part).
-    In this case, that token is a file name, so we report its size."""
-    return os.stat(name).st_size
+    according to the first token of the line. In this case, we parse a
+    file name out of the token, and report that file's size."""
+    return os.stat(_file_name_token(token)).st_size
 
 
 def assemble(lines):
@@ -44,7 +43,7 @@ def assemble(lines):
     and concatenate the file contents."""
     result = bytearray()
     for line in lines:
-        filename, = _file_name_parser(line)
+        filename, = _file_name_line(line)
         with open(filename, 'rb') as f:
             result.extend(f.read())
     return bytes(result)

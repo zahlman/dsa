@@ -18,11 +18,14 @@ def process(lines):
         start, tokens = tokenize(line)
         if start == '+': # line continuation.
             old_tokens.extend(tokens)
-        elif tokens:
-            if old_tokens: # check for start of line
+        # Lines are considered "blank" if they have no tokens and also
+        # aren't meta (prefixed with '!').
+        elif (start == '!') or bool(tokens):
+            # If there was a previous line to output, output it.
+            if (marker == '!') or bool(old_tokens):
                 yield line_number, marker, old_tokens
             line_number, marker, old_tokens = i, start, list(tokens)
-    if old_tokens: # in case of empty file
+    if (marker == '!') or bool(old_tokens): # dump the last line
         yield line_number, marker, old_tokens
 
 

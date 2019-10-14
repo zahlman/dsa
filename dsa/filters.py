@@ -48,11 +48,13 @@ class _UnpackChain:
         # needs to be in the same order as the views, so we prepend.
         lines = []
         for name, view in reversed(self._views):
+            line = ['!', (name,)]
             size, tokens = wrap_errors(
                 f'Filter `{name}`', view.pack_params, size
             )
-            tokens.insert(0, [f'@{name}'])
-            lines.insert(0, tokens)
+            line.extend(tokens)
+            lines.insert(0, line)
+        # FIXME: use `size`.
         return lines
 
 
