@@ -12,6 +12,25 @@ _file_name_token = single_parser('name', 'string')
 _file_name_line = line_parser('filename', _file_name_token, required=1)
 
 
+_SANITIZER = {
+    ord(c): '_' for c in (
+        # Characters that may cause problems in filenames.
+        '\0', '/', # Linux and other Unix-like systems
+        ':', # old MacOS path separator; can still be an issue
+        '\\', '\u00a5', # Windows file separator
+        # (Japanese locales may remap the yen symbol to '\\')
+        '?', '*', # wildcard syntax chars; can cause problems in DOS
+        '.' # hidden files (extension will be added programmatically)
+    )
+}
+
+
+def _sanitize(name, ext):
+    if ext.startswith('.'):
+        ext = ext[1:] # allow it to be specified either way
+    return f'{name.translate(_SANITIZER)}.{ext.translate(_SANITIZER)}'
+
+
 def disassemble(config, chunk_label, data, register, label_ref):
     """Produce formatted file contents for the chunk.
     In this case, we produce a line with a filename, and write the file;
@@ -23,7 +42,7 @@ def disassemble(config, chunk_label, data, register, label_ref):
     `register` -> callback to request disassembling another chunk.
     `label_ref` -> callback to retrieve label text for a pointer."""
     extension = _filetype(config) or 'dat'
-    filename = f'{chunk_label}.{extension}'
+    filename = _sanitize(chunk_label, extension)
     with open(filename, 'wb') as f:
         f.write(data)
     # One line with an empty prefix and one token that is the filename.
@@ -45,7 +64,7 @@ def assemble(lines):
     and concatenate the file contents."""
     result = bytearray()
     for line in lines:
-        filename, = _file_name_line(line)
-        with open(filename, 'rb') as f:
+        name, ext = os.path.splitext(_file_name_line(line)[0])
+        with open(_sanitize(name, ext), 'rb') as f:
             result.extend(f.read())
     return bytes(result)
