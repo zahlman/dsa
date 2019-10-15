@@ -177,7 +177,9 @@ class Pointer:
 
 def _make_pointer(typename, filter_specs, type_specs, lookup, member_specs):
     params, bits = type_specs
-    params.update(member_specs)
+    # Must make a new dict here and leave the base params alone,
+    # as a reusable template.
+    params = dict(**params, **member_specs)
     field = numeric_field_maker(params, bits)(lookup)
     BAD_SPECS.require(
         'encoding' not in params,
