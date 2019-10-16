@@ -58,17 +58,18 @@ class StructGroup:
         self._count = options.count # number of structs, if exact count required
         self._terminator = options.terminator
         self._graph = _normalized_graph(graph, options.first)
-        self._label_text = (
-            (lambda index: None)
-            if options.labels is None
-            else options.labels.label
-        )
+        self._label_data = options.labels, options.label_offset
         counted = self._count is not None
         terminated = self._terminator is not None
         has_last = not all(self._graph.values())
         end_methods = int(terminated) + int(has_last) + int(counted)
         CHUNK_END_CONFLICT.require(end_methods <= 1)
         self._expect_termination = terminated or has_last
+
+
+    def _label_text(self, index):
+        labeller, offset = self._label_data
+        return None if labeller is None else labeller.label(index + offset)
 
 
     def _terminator_amount(self, data, loc):

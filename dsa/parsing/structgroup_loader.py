@@ -118,6 +118,7 @@ class Options:
         self.count = get('count', None)
         self.terminator = get('terminator', None)
         self.labels = get('labels', None)
+        self.label_offset = get('label_offset', 0)
 
 
 class StructGroupLoader(SimpleLoader):
@@ -134,7 +135,7 @@ class StructGroupLoader(SimpleLoader):
             self._options = Options(argument_parser(
                 align='positive', first='{string',
                 count='positive', terminator='hexdump',
-                labels=self._enums
+                labels=self._enums, label_offset='integer'
             )(tokens))
         else:
             data = StructData(tokens, self._options.align)
