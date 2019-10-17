@@ -14,11 +14,8 @@ def _invoke(func, args=None):
 
 def _setup(description, func):
     # implementation for `entry_point`.
-    func._parser = ArgumentParser(
-        prog=func.__name__, description=description
-    )
-    func.invoke = partial(_invoke, func)
-    return func
+    func._parser = ArgumentParser(prog=func.__name__, description=description)
+    return rebind(func, func)
 
 
 def _add_param(args, kwargs, func):
