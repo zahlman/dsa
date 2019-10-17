@@ -8,6 +8,7 @@ from ..plugins import is_function, is_integer, load_plugins
 from .entrypoint import rebind
 from .tracing import timed, tracing
 from .location import folder, get as get_location
+from contextlib import contextmanager
 from datetime import datetime
 from functools import partial, wraps
 from os.path import join as join_path, abspath as fix_path
@@ -100,19 +101,22 @@ def load_language(pathfile):
 
 
 def _errmsg(e):
-    # flushes to ensure serial output when stdout is available.
-    sys.stdout.flush()
     print(e, file=sys.stderr)
+
+
+@contextmanager
+def _fail():
+    tracing(False) # Otherwise, one 'Done' message may escape.
+    # flush to ensure serial output when stdout is available.
+    sys.stdout.flush()
+    _errmsg(' OOPS '.center(58, '-')) # Always show this message.
+    yield
+    # flush again to be nice to any subsequent calls, if we're being
+    # invoked programmatically rather than from the command line.
     sys.stderr.flush()
 
 
-def _start_error():
-    tracing(False) # Otherwise, one 'Done' message will escape.
-    _errmsg(' OOPS '.center(58, '-'))
-
-
 def _crash(e, tb):
-    _start_error()
     now = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
     filename = f'dsalog-{now}.txt'
     _errmsg('DSA encountered an internal error and must abort:')
@@ -128,7 +132,6 @@ def _crash(e, tb):
 
 
 def _io_error(e):
-    _start_error()
     _errmsg('DSA encountered a problem with reading or writing a file:')
     _errmsg(e)
     _errmsg('Please make sure that the path is correct and nothing is')
@@ -136,7 +139,6 @@ def _io_error(e):
 
 
 def _user_error(e):
-    _start_error()
     _errmsg('DSA encountered an error in the data:')
     _errmsg(f'{e.__class__.__name__}: {e}')
     _errmsg('Aborting.')
@@ -145,12 +147,14 @@ def _user_error(e):
 def _report(func, *args, **kwargs):
     try:
         func(*args, **kwargs)
-    except IOError as e:
-        _io_error(e)
-    except UserError as e:
-        _user_error(e)
     except Exception as e:
-        _crash(e, traceback.format_exc())
+        with _fail():
+            if isinstance(e, IOError):
+                _io_error(e)
+            elif isinstance(e, UserError):
+                _user_error(e)
+            else:
+                _crash(e, traceback.format_exc())
 
 
 def reporting(label):
