@@ -1,6 +1,6 @@
 from ..parsing.file_parsing import load_files
 from ..parsing.source_loader import SourceLoader
-from .common import get_data, load_language
+from .common import get_data, load_language, reporting
 from .entrypoint import entry_point, param
 from .tracing import timed, trace
 from binascii import hexlify
@@ -64,12 +64,12 @@ def _do_output(to_write, binary):
         f.write(to_write)
 
 
+@reporting('Running DSA...')
 @param('source', 'name of file to assemble')
 @param('binary', 'source binary file to assemble into')
 @param('-o', '--output', 'binary file to write (if not overwriting source)')
 @param('-p', '--paths', 'name of input file containing path config info')
 @entry_point('Data Structure Assembler - assembly mode')
-@timed('Running DSA...')
 def dsa(binary, source, paths, output=None):
     data = get_data(binary)
     groups, filters = load_language(paths)

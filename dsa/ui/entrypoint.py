@@ -5,10 +5,11 @@ from functools import partial
 """System for creating entry points."""
 
 
-def _invoke(func):
+def _invoke(func, args=None):
     # Use command-line arguments to call a function that was decorated
     # with `entry_point`, and possibly one or more `params`.
-    func(**vars(func._parser.parse_args()))
+    # If `args` are not provided, take them from sys.argv.
+    func(**vars(func._parser.parse_args(args)))
 
 
 def _setup(description, func):
@@ -23,6 +24,15 @@ def _setup(description, func):
 def _add_param(args, kwargs, func):
     *args, helptext = args
     func._parser.add_argument(*args, help=helptext, **kwargs)
+    return func
+
+
+def rebind(func, replacement):
+    """Set `func.invoke` to call something else.
+    This allows for custom differences in behaviour between the entry point
+    and the underlying version of the function.
+    `func` is returned to simplify interoperation with decorators."""
+    func.invoke = partial(_invoke, replacement)
     return func
 
 
