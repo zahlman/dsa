@@ -69,6 +69,7 @@ def _do_output(to_write, binary):
 @param('-o', '--output', 'binary file to write (if not overwriting source)')
 @param('-p', '--paths', 'name of input file containing path config info')
 @entry_point('Data Structure Assembler - assembly mode')
+@timed('Running DSA...')
 def dsa(binary, source, paths, output=None):
     data = get_data(binary)
     groups, filters = load_language(paths)
