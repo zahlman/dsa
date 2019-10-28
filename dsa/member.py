@@ -175,11 +175,11 @@ class Pointer:
         return self._field.parse(items[0]).to_bytes(self.size, 'little')
 
 
-def _make_pointer(typename, filter_specs, type_specs, lookup, member_specs):
-    params, bits = type_specs
-    # Must make a new dict here and leave the base params alone,
-    # as a reusable template.
-    params = dict(**params, **member_specs)
+def _make_pointer(typename, filter_specs, type_specs, lookup, member_params):
+    base_params, bits = type_specs
+    # Make a new dict here, leaving the base params as a reusable template.
+    # N.B. `member_params` may override `base_params` values.
+    params = {**base_params, **member_params}
     field = numeric_field_maker(params, bits)(lookup)
     BAD_SPECS.require(
         'encoding' not in params,
