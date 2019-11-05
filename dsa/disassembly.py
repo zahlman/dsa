@@ -5,7 +5,7 @@ from itertools import count
 
 
 class CHUNK_TYPE_CONFLICT(UserError):
-    """conflicting requests for parsing data at 0x{where:X}"""
+    """chunk type conflict at 0x{where:X}: `{current}` vs. `{previous}`"""
 
 
 class _InterpreterWrapper:
@@ -50,8 +50,11 @@ class _DummyChunk:
         return 0
 
 
-    def match_args(self, args):
-        return args == self._group_args
+    def verify_args(self, args, where):
+        CHUNK_TYPE_CONFLICT.require(
+            args == self._group_args, where=where,
+            previous=', '.join(self._group_args), current=', '.join(args)
+        )
 
 
     def load(self, register, label_ref):
@@ -66,12 +69,13 @@ class _DummyChunk:
 
 
 class _Chunk:
-    def __init__(self, interpreter, tag, unpack_chain, label):
+    def __init__(self, group_args, interpreter, tag, unpack_chain, label):
         assert isinstance(interpreter, _InterpreterWrapper)
         self._interpreter = interpreter
         self._tag, self._label = tag, label
         self._data, self._filter_info = unpack_chain.data, unpack_chain.info
         self._lines, self._size = None, 0
+        self._group_args = group_args # remembered for diagnostics.
 
 
     @property # read-only
@@ -84,8 +88,12 @@ class _Chunk:
         return self._size
 
 
-    def match_args(self, args):
-        return args == self._interpreter.args
+    def verify_args(self, args, where):
+        # FIXME: Does it make sense to handle this the same way?
+        CHUNK_TYPE_CONFLICT.require(
+            args == self._group_args, where=where,
+            previous=', '.join(self._group_args), current=', '.join(args)
+        )
 
 
     def load(self, register, label_ref):
@@ -152,22 +160,19 @@ class Disassembler:
         unpack_chain = self._filter_library.unpack_chain(
             self._source, start, filter_specs
         )
-        return _Chunk(interpreter, tag, unpack_chain, label)
+        return _Chunk(group_args, interpreter, tag, unpack_chain, label)
 
 
     def _register(self, group_args, filter_specs, location, label_base):
         if location in self._chunks:
-            CHUNK_TYPE_CONFLICT.require(
-                self._chunks[location].match_args(group_args),
-                where=location
-            )
-        else:
-            label = self._make_label(label_base)
-            self._chunks[location] = self._init_chunk(
-                group_args, filter_specs, location, label
-            )
-            self._pending.add(location)
-            self._labels.add(label)
+            self._chunks[location].verify_args(group_args, location)
+            return
+        label = self._make_label(label_base)
+        self._chunks[location] = self._init_chunk(
+            group_args, filter_specs, location, label
+        )
+        self._pending.add(location)
+        self._labels.add(label)
 
 
     def _label_ref(self, location):
