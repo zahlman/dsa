@@ -15,8 +15,19 @@ def assemble(infilename, outfilename, groups, filters):
     chunks = load_files([outfilename], SourceLoader, groups, filters)
     with open(infilename, 'rb') as f:
         data = bytearray(f.read())
+    last, expanded = 0, 0 
     for position, chunk in chunks.items():
+        assert position >= last
+        last = position + len(chunk)
+        needed = last - len(data)
+        if needed > 0:
+            expanded += needed
+            data.extend(bytes(needed))
         data[position:position+len(chunk)] = chunk
+    if expanded:
+        message = 'Warning: output binary was expanded by {0} (0x{0:X}) bytes'
+        trace(message.format(expanded))
+        trace('to accomodate written data.')
     return bytes(data)
 
 
