@@ -4,7 +4,7 @@ build-backend = "poetry.masonry.api"
 
 [tool.poetry]
 name = "dsa"
-version = "0.16.1+228"
+version = "0.16.1+229"
 description = ""
 authors = [ "Karl Knechtel <karl.a.knechtel@gmail.com>",]
 
