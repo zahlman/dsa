@@ -51,7 +51,7 @@ def extfile():
 def roots():
     with open(extfile()) as f:
         return [
-            line for line in (path.strip() for path in f) 
+            line for line in (path.rstrip() for path in f) 
             if line != '' and not line.startswith('#')
         ]
 
