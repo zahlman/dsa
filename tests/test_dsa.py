@@ -1,13 +1,21 @@
 # System under test.
 from dsa.ui.dsd import dsd
 # Standard library.
-import contextlib, os, shutil
+import os, shutil
 from pathlib import Path
 # Third-party.
 import pytest
 
 
 HERE = Path(os.path.abspath(__file__)).parent
+
+
+@pytest.fixture(scope='session', autouse=True)
+def session(tmp_path_factory):
+    try:
+        yield
+    finally:
+        shutil.rmtree(str(tmp_path_factory.getbasetemp()))
 
 
 @pytest.fixture
@@ -20,7 +28,6 @@ def environment(tmp_path):
         yield tmp_path
     finally:
         os.chdir(old_path)
-        shutil.rmtree(str(tmp_path))
 
 
 def _validate(base_name):
@@ -41,3 +48,8 @@ def test_input(environment):
 def test_disassemble_hexdump(environment):
     dsd('test.bin', 'hex:0', 'test_hex.txt', None)
     _validate('test_hex')
+
+
+def test_disassemble_partial(environment):
+    dsd('test.bin', 'hex:0x81', 'test_hex_partial.txt', None)
+    _validate('test_hex_partial')
