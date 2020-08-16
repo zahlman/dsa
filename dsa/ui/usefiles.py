@@ -57,7 +57,7 @@ def use_files(path):
 @entry_point('Data Structure Assembler - remove library path')
 def drop_files(path):
     MANDATORY_PATH.require(path != '.')
-    path = _load_paths()
+    paths = _load_paths()
     if path in paths:
         paths.remove(path)
         _save_paths(paths)
