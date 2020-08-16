@@ -27,7 +27,7 @@ class BAD_LINE(UserError):
 
 def token_splitter(delims):
     # Also used by description.FlagsDescription to parse `|`s.
-    return re.compile(f'\s*[{re.escape(delims)}]\s*').split
+    return re.compile(rf'\s*[{re.escape(delims)}]\s*').split
 
 
 _split = token_splitter(':,')
@@ -53,7 +53,7 @@ _tokenizer = re.compile('|'.join((
 )))
 
 
-_linestart = re.compile('^[+!\s]?')
+_linestart = re.compile(r'^[+!\s]?')
 
 
 _have_whitespace = True
