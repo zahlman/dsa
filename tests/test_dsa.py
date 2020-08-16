@@ -23,13 +23,14 @@ def session(tmp_path_factory):
 
 @pytest.fixture
 def environment(tmp_path):
+    # Create a temp directory for the test, where output files will be
+    # written. Some test binary data is copied here to be analysed, and the
+    # results will be compared to reference files in expected/.
     try:
         old_path = Path.cwd()
         os.chdir(tmp_path)
         with open('test.bin', 'wb') as data:
             data.write(bytes(range(256)))
-        # dirs_exist_ok requires Python 3.8.
-        shutil.copytree(HERE / 'environment', '.', dirs_exist_ok=True)
         yield tmp_path
     finally:
         os.chdir(old_path)
@@ -46,7 +47,7 @@ def _important_lines(filename):
 def _validate(base_name):
     # The generated file exactly matches a reference expectation file.
     actual = _important_lines(f'{base_name}.txt')
-    expected = _important_lines(f'{base_name}_ref.txt')
+    expected = _important_lines(HERE / 'expected' / f'{base_name}.txt')
     assert actual == expected
 
 
