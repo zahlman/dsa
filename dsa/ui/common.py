@@ -50,7 +50,10 @@ def extfile():
 
 def roots():
     with open(extfile()) as f:
-        return [path.strip() for path in f]
+        return [
+            line for line in (path.strip() for path in f) 
+            if line != '' and not line.startswith('#')
+        ]
 
 
 @timed('Loading definition paths...')
