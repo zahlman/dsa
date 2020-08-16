@@ -1,3 +1,9 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
+# This file is a reference output for a test.
+# Blank lines, and lines starting with #, will be ignored in comparison.
+
 !@main 0x81 hex
 HEXD 81 82 83 84 85 86 87 88 89 8A 8B 8C 8D 8E 8F 90
 HEXD 91 92 93 94 95 96 97 98 99 9A 9B 9C 9D 9E 9F A0
@@ -11,4 +17,3 @@ HEX4 F9 FA FB FC
 HEX2 FD FE
 HEX1 FF
 !# 0x100
-
