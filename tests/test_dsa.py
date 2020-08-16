@@ -33,12 +33,18 @@ def environment(tmp_path):
         os.chdir(old_path)
 
 
+def _important_lines(filename):
+    with open(filename) as f:
+        return [
+            line for line in (line.strip() for line in f) 
+            if line != '' and not line.startswith('#')
+        ]
+
+
 def _validate(base_name):
     # The generated file exactly matches a reference expectation file.
-    with open(f'{base_name}.txt') as f:
-        actual = f.read()
-    with open(f'{base_name}_ref.txt') as f:
-        expected = f.read()
+    actual = _important_lines(f'{base_name}.txt')
+    expected = _important_lines(f'{base_name}_ref.txt')
     assert actual == expected
 
 
