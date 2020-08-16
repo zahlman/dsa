@@ -1,10 +1,10 @@
 # Copyright (C) 2018-2020 Karl Knechtel
 # Licensed under the Open Software License version 3.0
 
-from .entrypoint import entry_point, param
 from .location import get as root
 from ..errors import UserError
 from os.path import join as join_path, abspath as fix_path
+from epmanager import entrypoint
 
 
 class MANDATORY_PATH(UserError):
@@ -44,8 +44,11 @@ def fixed_roots():
     return [fix_path(join_path(_library(), r)) for r in _load_paths()]
 
 
-@param('path', 'path to use (should be absolute)')
-@entry_point('Data Structure Assembler - add library path')
+@entrypoint(
+    name='dsa-use',
+    description='Data Structure Assembler - add library path',
+    path='path to use (should be absolute)'
+)
 def use_files(path):
     paths = _load_paths()
     if path not in paths:
@@ -53,8 +56,11 @@ def use_files(path):
         _save_paths(paths)
 
 
-@param('path', 'path to stop using (should be absolute)')
-@entry_point('Data Structure Assembler - remove library path')
+@entrypoint(
+    name='dsa-drop',
+    description='Data Structure Assembler - remove library path',
+    path='path to stop using (should be absolute)'
+)
 def drop_files(path):
     MANDATORY_PATH.require(path != '.')
     paths = _load_paths()

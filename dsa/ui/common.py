@@ -1,6 +1,9 @@
 # Copyright (C) 2018-2020 Karl Knechtel
 # Licensed under the Open Software License version 3.0
 
+from .location import folder
+from .tracing import timed, trace, tracing
+from .usefiles import fixed_roots
 from ..errors import UserError
 from ..filters import FilterLibrary
 from ..parsing.file_parsing import load_files, load_files_into, load_lines
@@ -8,14 +11,10 @@ from ..parsing.path_loader import PathLoader
 from ..parsing.structgroup_loader import StructGroupLoader
 from ..parsing.type_loader import TypeLoader
 from ..plugins import is_function, load_plugins
-from .entrypoint import rebind
-from .tracing import timed, tracing
-from .location import folder
-from .usefiles import fixed_roots
 from contextlib import contextmanager
 from datetime import datetime
-from functools import partial, wraps
 import sys, traceback
+from epmanager import entrypoint, DefaultParser
 
 
 """Common loading routines for dsa and dsd."""
@@ -134,19 +133,33 @@ def _user_error(e):
     _errmsg('Aborting.')
 
 
-def _report(func, *args, **kwargs):
-    try:
-        func(*args, **kwargs)
-    except Exception as e:
-        with _fail():
-            if isinstance(e, IOError):
-                _io_error(e)
-            elif isinstance(e, UserError):
-                _user_error(e)
-            else:
-                _crash(e, traceback.format_exc())
+class _ReportingParser(DefaultParser):
+    def setup(self, config):
+        self._message = config.get('message', None)
+        super().setup(config)
 
 
-def reporting(label):
-    # You are not expected to understand this.
-    return lambda f: rebind(f, wraps(f)(partial(timed(label)(_report), f)))
+    @classmethod
+    def config_keys(cls):
+        return {'message'}
+
+
+    def call_with(self, parsed_args):
+        if self._message is not None:
+            trace(self._message)
+        try:
+            self.raw_call(parsed_args)
+        except Exception as e:
+            with _fail():
+                if isinstance(e, IOError):
+                    _io_error(e)
+                elif isinstance(e, UserError):
+                    _user_error(e)
+                else:
+                    _crash(e, traceback.format_exc())
+
+
+def dsa_entrypoint(**kwargs):
+    assert 'parser_class' not in kwargs
+    kwargs['parser_class'] = _ReportingParser
+    return entrypoint(**kwargs)
