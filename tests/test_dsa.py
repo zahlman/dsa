@@ -39,7 +39,7 @@ def environment(tmp_path):
 def _important_lines(filename):
     with open(filename) as f:
         return [
-            line for line in (line.rstrip() for line in f) 
+            line for line in (line.rstrip() for line in f)
             if line != '' and not line.startswith('#')
         ]
 

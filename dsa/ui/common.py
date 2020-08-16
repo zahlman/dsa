@@ -7,14 +7,14 @@ from ..parsing.file_parsing import load_files, load_files_into, load_lines
 from ..parsing.path_loader import PathLoader
 from ..parsing.structgroup_loader import StructGroupLoader
 from ..parsing.type_loader import TypeLoader
-from ..plugins import is_function, is_integer, load_plugins
+from ..plugins import is_function, load_plugins
 from .entrypoint import rebind
 from .tracing import timed, tracing
-from .location import folder, get as get_location
+from .location import folder
+from .usefiles import fixed_roots
 from contextlib import contextmanager
 from datetime import datetime
 from functools import partial, wraps
-from os.path import join as join_path, abspath as fix_path
 import sys, traceback
 
 
@@ -40,29 +40,13 @@ _DEFAULT_PATHS = [
 ]
 
 
-def library():
-    return fix_path(join_path(get_location(), 'library'))
-
-
-def extfile():
-    return join_path(library(), 'libpaths.txt')
-
-
-def roots():
-    with open(extfile()) as f:
-        return [
-            line for line in (path.rstrip() for path in f) 
-            if line != '' and not line.startswith('#')
-        ]
-
-
 @timed('Loading definition paths...')
 def _load_paths(pathfile):
-    fixed_roots = [fix_path(join_path(library(), r)) for r in roots()]
+    roots = fixed_roots()
     return (
-        load_lines(_DEFAULT_PATHS, PathLoader, fixed_roots, None)
+        load_lines(_DEFAULT_PATHS, PathLoader, roots, None)
         if pathfile is None
-        else load_files([pathfile], PathLoader, fixed_roots, folder(pathfile))
+        else load_files([pathfile], PathLoader, roots, folder(pathfile))
     )
 
 

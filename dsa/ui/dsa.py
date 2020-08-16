@@ -18,7 +18,7 @@ def assemble(infilename, outfilename, groups, filters):
     chunks = load_files([outfilename], SourceLoader, groups, filters)
     with open(infilename, 'rb') as f:
         data = bytearray(f.read())
-    last, expanded = 0, 0 
+    last, expanded = 0, 0
     for position, chunk in chunks.items():
         assert position >= last
         last = position + len(chunk)
