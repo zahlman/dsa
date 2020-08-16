@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
 from dsa.parsing.line_parsing import line_parser
 from dsa.parsing.token_parsing import make_parser, single_parser
 import os, re

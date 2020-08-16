@@ -5,8 +5,13 @@ build-backend = "poetry.masonry.api"
 [tool.poetry]
 name = "dsa"
 version = "0.16.1+229"
-description = ""
+description = "Data Structure Assembler - a tool for making sense of binary data"
+license = "OSL-3.0"
 authors = [ "Karl Knechtel <karl.a.knechtel@gmail.com>",]
+readme = "README.rst"
+homepage = "https://github.com/zahlman/dsa"
+repository = "https://github.com/zahlman/dsa"
+documentation = "https://github.com/zahlman/dsa"
 
 [tool.poetry.scripts]
 dsa = "dsa.ui.dsa:dsa.invoke"

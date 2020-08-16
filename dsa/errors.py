@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
 class UserError(ValueError):
     """For now, the __doc__ of a subclass provides the message template."""
     def __init__(self, message=None, **kwargs):

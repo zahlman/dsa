@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
 from ..errors import MappingError, UserError
 from ..ui.tracing import trace
 from .file_parsing import SimpleLoader

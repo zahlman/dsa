@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
 from .description import Raw
 from .errors import MappingError, UserError
 from .parsing.line_parsing import argument_parser, line_parser

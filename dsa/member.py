@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
 from .errors import SequenceError, UserError
 from .field import member_field_data, numeric_field_maker
 from .parsing.line_parsing import argument_parser, line_parser

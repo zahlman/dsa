@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
 from dsa.errors import UserError
 # Since filter modules will be dynamically imported, they should use absolute
 # imports for any DSA modules. non-UserError exceptions will be allowed to

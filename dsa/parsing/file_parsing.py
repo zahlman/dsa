@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
 from ..ui.tracing import trace
 from ..errors import wrap as wrap_errors, MappingError
 from .line_parsing import tokenize

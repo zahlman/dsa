@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
 from ..errors import UserError
 from ..filters import FilterLibrary
 from ..parsing.file_parsing import load_files, load_files_into, load_lines

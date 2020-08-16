@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
 from .errors import wrap as wrap_errors, UserError
 from .ui.tracing import trace
 from importlib.util import spec_from_file_location, module_from_spec
