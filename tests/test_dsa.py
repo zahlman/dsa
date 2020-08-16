@@ -26,6 +26,8 @@ def environment(tmp_path):
     try:
         old_path = Path.cwd()
         os.chdir(tmp_path)
+        with open('test.bin', 'wb') as data:
+            data.write(bytes(range(256)))
         # dirs_exist_ok requires Python 3.8.
         shutil.copytree(HERE / 'environment', '.', dirs_exist_ok=True)
         yield tmp_path
