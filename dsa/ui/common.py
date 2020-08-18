@@ -2,7 +2,7 @@
 # Licensed under the Open Software License version 3.0
 
 from .location import folder
-from .tracing import timed, trace, tracing
+from .tracing import my_tracer
 from .usefiles import fixed_roots
 from ..errors import UserError
 from ..filters import FilterLibrary
@@ -11,7 +11,6 @@ from ..parsing.path_loader import PathLoader
 from ..parsing.structgroup_loader import StructGroupLoader
 from ..parsing.type_loader import TypeLoader
 from ..plugins import is_function, load_plugins
-from contextlib import contextmanager
 from datetime import datetime
 import sys, traceback
 from epmanager import entrypoint, DefaultParser
@@ -20,7 +19,7 @@ from epmanager import entrypoint, DefaultParser
 """Common loading routines for dsa and dsd."""
 
 
-@timed('Loading binary...')
+@my_tracer('Loading binary')
 def get_data(source):
     with open(source, 'rb') as f:
         return f.read()
@@ -39,7 +38,7 @@ _DEFAULT_PATHS = [
 ]
 
 
-@timed('Loading definition paths...')
+@my_tracer('Loading definition paths')
 def _load_paths(pathfile):
     roots = fixed_roots()
     return (
@@ -49,24 +48,24 @@ def _load_paths(pathfile):
     )
 
 
-@timed('Loading filters...')
+@my_tracer('Loading filters')
 def _load_filters(paths):
     return FilterLibrary(paths['filters'])
 
 
-@timed('Loading types...')
+@my_tracer('Loading types')
 def _load_types(paths):
     return load_files(paths['types'], TypeLoader)
 
 
-@timed('Loading structgroups...')
+@my_tracer('Loading structgroups')
 def _load_structgroups(interpreters, enums, types, paths):
     load_files_into(
         interpreters, paths['structgroups'], StructGroupLoader, enums, types
     )
 
 
-@timed('Loading interpreters...')
+@my_tracer('Loading interpreters')
 def _load_interpreters(paths):
     method_names = '__init__', 'assemble', 'disassemble', 'item_size'
     property_names = 'alignment',
@@ -79,7 +78,7 @@ def _load_interpreters(paths):
     )
 
 
-@timed('Loading language...')
+@my_tracer('Loading language')
 def load_language(pathfile):
     paths = _load_paths(pathfile)
     interpreters = _load_interpreters(paths)
@@ -91,18 +90,6 @@ def load_language(pathfile):
 
 def _errmsg(e):
     print(e, file=sys.stderr)
-
-
-@contextmanager
-def _fail():
-    tracing(False) # Otherwise, one 'Done' message may escape.
-    # flush to ensure serial output when stdout is available.
-    sys.stdout.flush()
-    _errmsg(' OOPS '.center(58, '-')) # Always show this message.
-    yield
-    # flush again to be nice to any subsequent calls, if we're being
-    # invoked programmatically rather than from the command line.
-    sys.stderr.flush()
 
 
 def _crash(e, tb):
@@ -135,8 +122,8 @@ def _user_error(e):
 
 class _ReportingParser(DefaultParser):
     def setup(self, config):
-        self._message = config.get('message', None)
         super().setup(config)
+        self._message = config['message']
 
 
     @classmethod
@@ -145,18 +132,17 @@ class _ReportingParser(DefaultParser):
 
 
     def call_with(self, parsed_args):
-        if self._message is not None:
-            trace(self._message)
         try:
-            self.raw_call(parsed_args)
+            with my_tracer(self._message):
+                self.raw_call(parsed_args)
         except Exception as e:
-            with _fail():
-                if isinstance(e, IOError):
-                    _io_error(e)
-                elif isinstance(e, UserError):
-                    _user_error(e)
-                else:
-                    _crash(e, traceback.format_exc())
+            _errmsg(' OOPS '.center(58, '-'))
+            if isinstance(e, IOError):
+                _io_error(e)
+            elif isinstance(e, UserError):
+                _user_error(e)
+            else:
+                _crash(e, traceback.format_exc())
 
 
 def dsa_entrypoint(**kwargs):

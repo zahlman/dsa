@@ -1,11 +1,11 @@
 # Copyright (C) 2018-2020 Karl Knechtel
 # Licensed under the Open Software License version 3.0
 
-from ..errors import UserError
-from ..ui.tracing import trace
 from .file_parsing import SimpleLoader
 from .line_parsing import line_parser
 from .token_parsing import single_parser
+from ..errors import UserError
+from ..ui.tracing import my_tracer
 from functools import partial
 from glob import glob
 from os.path import join as join_path, abspath as fix_path
@@ -83,12 +83,14 @@ class PathLoader(SimpleLoader):
         relative_pattern = join_path(*parts, *last)
         for root in self._roots:
             pattern = join_path(root, relative_pattern)
-            trace(f'Collecting: {pattern}')
+            my_tracer.trace(f'Collecting: {pattern}')
             for path in glob(pattern, recursive=True):
                 pathdict.add(fix_path(path))
                 added = True
         if not added:
-            trace(f'Warning: pattern `{relative_pattern}` found no files')
+            my_tracer.trace(
+                f'Warning: pattern `{relative_pattern}` found no files'
+            )
 
 
     def result(self):

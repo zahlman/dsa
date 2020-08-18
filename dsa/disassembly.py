@@ -3,7 +3,7 @@
 
 from .errors import wrap as wrap_errors, UserError
 from .output import output_file
-from .ui.tracing import trace
+from .ui.tracing import my_tracer
 from itertools import count
 
 
@@ -155,7 +155,9 @@ class Disassembler:
         group_name, *group_config = group_args
         group = self._group_lookup.get(group_name, None)
         if group is None:
-            trace(f'Warning: will skip chunk of unknown type {group_name}')
+            my_tracer.trace(
+                f'Warning: will skip chunk of unknown type {group_name}'
+            )
             return _DummyChunk(group_args, label)
         # We have a valid group.
         interpreter = _InterpreterWrapper(group_name, group, group_config)

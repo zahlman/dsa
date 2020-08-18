@@ -2,7 +2,7 @@
 # Licensed under the Open Software License version 3.0
 
 from .errors import wrap as wrap_errors, UserError
-from .ui.tracing import trace
+from .ui.tracing import my_tracer
 from importlib.util import spec_from_file_location, module_from_spec
 import os
 
@@ -75,7 +75,6 @@ def _test(parent, name, children):
 
 
 def _module_from_path(path):
-    trace(f"Loading: File '{path}'")
     folder, filename = os.path.split(path)
     basename, extension = os.path.splitext(filename)
     spec = spec_from_file_location(basename, path)
@@ -86,6 +85,7 @@ def _module_from_path(path):
 
 
 def _load_plugin(path, checklist):
+    my_tracer.trace(f"Loading: File '{path}'")
     module = _module_from_path(path)
     name = module.__name__
     _test(module, name, checklist)

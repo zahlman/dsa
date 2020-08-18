@@ -1,9 +1,9 @@
 # Copyright (C) 2018-2020 Karl Knechtel
 # Licensed under the Open Software License version 3.0
 
-from ..ui.tracing import trace
-from ..errors import wrap as wrap_errors, MappingError
 from .line_parsing import tokenize
+from ..errors import wrap as wrap_errors, MappingError
+from ..ui.tracing import my_tracer
 import os.path
 
 
@@ -48,7 +48,7 @@ class SimpleLoader:
 
 
 def feed(source_name, loader, lines):
-    trace(f'Loading: {source_name}')
+    my_tracer.trace(f'Loading: {source_name}')
     for position, indent, line_tokens in lines:
         wrap_errors(
             f'{source_name}: Line {position}',
