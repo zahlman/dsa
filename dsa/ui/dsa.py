@@ -10,10 +10,12 @@ from ..parsing.source_loader import SourceLoader
 """Interface to assembler."""
 
 
-def assemble(infilename, outfilename, groups, filters):
-    chunks = load_files([outfilename], SourceLoader, groups, filters)
-    with open(infilename, 'rb') as f:
-        data = bytearray(f.read())
+def assemble(outfilename, groups, filters):
+    return load_files([outfilename], SourceLoader, groups, filters)
+
+
+def apply(chunks, data):
+    data = bytearray(data)
     last, expanded = 0, 0
     for position, chunk in chunks.items():
         assert position >= last
@@ -30,43 +32,6 @@ def assemble(infilename, outfilename, groups, filters):
     return bytes(data)
 
 
-def _dumphex(data):
-    for i in range(0, len(data), 16):
-        my_tracer.trace(data[i:i+16].hex(' '))
-
-
-def verify_assembly(infilename, outfilename, groups, filters):
-    chunks = load_files([outfilename], SourceLoader, groups, filters)
-    with open(infilename, 'rb') as f:
-        reference = bytearray(f.read())
-    offset = 0
-    ok, overwrite, fail = 0, 0, 0
-    for position, chunk in chunks.items():
-        original = reference[position:position+len(chunk)]
-        if position < offset:
-            my_tracer.trace(
-                f'OVERWRITE at 0x{position:X}: last ended at 0x{offset:X}'
-            )
-            overwrite += 1
-        elif chunk != original:
-            my_tracer.trace(f'MISMATCH at 0x{position:X}: ORIGINAL (')
-            _dumphex(original)
-            my_tracer.trace(f') ASSEMBLED (')
-            _dumphex(chunk)
-            my_tracer.trace(f')')
-            fail += 1
-        else:
-            ok += 1
-        offset = position + len(chunk)
-    my_tracer.trace('')
-    total = ok + overwrite + fail
-    my_tracer.trace(', '.join((
-        f'{ok}/{total} OK',
-        f'{overwrite}/{total} overwrites',
-        f'{fail}/{total} mismatches'
-    )))
-
-
 @dsa_entrypoint(
     description='Data Structure Assembler - assembly mode',
     message='Running DSA...',
@@ -79,7 +44,7 @@ def dsa(binary, source, paths, output=None):
     data = get_data(binary)
     groups, filters = load_language(paths)
     with my_tracer('Assembling'):
-        result = assemble(binary, source, groups, filters)
+        result = apply(assemble(source, groups, filters), data)
     with my_tracer('Writing to output'):
         with open(binary if output is None else output, 'wb') as f:
             f.write(result)
