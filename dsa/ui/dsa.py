@@ -5,7 +5,6 @@ from .common import dsa_entrypoint, get_data, load_language
 from .tracing import my_tracer
 from ..parsing.file_parsing import load_files
 from ..parsing.source_loader import SourceLoader
-from binascii import hexlify
 
 
 """Interface to assembler."""
@@ -33,13 +32,7 @@ def assemble(infilename, outfilename, groups, filters):
 
 def _dumphex(data):
     for i in range(0, len(data), 16):
-        hexed = hexlify(data[i:i+16]).upper()
-        bytecount = len(hexed) // 2
-        result = bytearray(bytecount * 3)
-        result[::3] = hexed[::2]
-        result[1::3] = hexed[1::2]
-        result[2::3] = b' ' * bytecount
-        my_tracer.trace(result.decode('ascii'))
+        my_tracer.trace(data[i:i+16].hex(' '))
 
 
 def verify_assembly(infilename, outfilename, groups, filters):
@@ -65,7 +58,7 @@ def verify_assembly(infilename, outfilename, groups, filters):
         else:
             ok += 1
         offset = position + len(chunk)
-    print()
+    my_tracer.trace('')
     total = ok + overwrite + fail
     my_tracer.trace(', '.join((
         f'{ok}/{total} OK',
