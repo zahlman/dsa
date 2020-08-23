@@ -3,6 +3,7 @@
 
 # System under test.
 from dsa.ui.dsd import dsd
+from dsa.errors import UserError
 # Standard library.
 import os, shutil
 from pathlib import Path
@@ -31,6 +32,7 @@ def environment(tmp_path):
         os.chdir(tmp_path)
         with open('test.bin', 'wb') as data:
             data.write(bytes(range(256)))
+        shutil.copytree(HERE / 'lib', 'lib')
         yield tmp_path
     finally:
         os.chdir(old_path)
@@ -65,3 +67,28 @@ def test_disassemble_hexdump(environment):
 def test_disassemble_partial(environment):
     dsd('test.bin', 'hex:0x81', 'test_hex_partial.txt', None)
     _validate('test_hex_partial')
+
+
+def test_use_local(capsys, environment):
+    # It uses the local config when and only when requested.
+    # Values are little-endian.
+    dsd('test.bin', 'example:0', 'test_example.txt', 'lib/paths.txt')
+    _validate('test_example')
+    # When the local config isn't available, it disassembles empty blocks
+    # and displays a warning.
+    dsd('test.bin', 'example:0', 'test_example2.txt', None)
+    outtxt = capsys.readouterr().out
+    assert 'Warning: will skip chunk of unknown type example' in outtxt
+    _validate('test_example2')
+
+
+def test_consider_align(environment):
+    # It respects the 'align' specified in the structgroup.
+    with pytest.raises(UserError):
+        dsd('test.bin', 'example:3', 'test_example3.txt', 'lib/paths.txt')
+
+
+def test_signedness(environment):
+    # It properly considers the signedness of types.
+    dsd('test.bin', 'example:4', 'test_example3.txt', 'lib/paths.txt')
+    _validate('test_example3')

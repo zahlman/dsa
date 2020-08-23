@@ -1,0 +1,5 @@
+# Use system types, but locally provided test structgroups.
+types
+    **
+structgroups ./structgroups
+    **

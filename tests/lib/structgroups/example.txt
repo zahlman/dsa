@@ -1,0 +1,12 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
+# A test structure.
+
+align:4 count:16
+
+DATA
+    Quad q
+    Spair p
+    Byte b
+    Sbyte s
