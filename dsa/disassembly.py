@@ -11,6 +11,10 @@ class CHUNK_TYPE_CONFLICT(UserError):
     """chunk type conflict at 0x{where:X}: `{current}` vs. `{previous}`"""
 
 
+class MISALIGNED_CHUNK(UserError):
+    """chunk location 0x{where:X} invalid; must be a multiple of {align}"""
+
+
 class _InterpreterWrapper:
     def __init__(self, name, impl, config):
         self._name, self._impl, self._config = name, impl, config
@@ -159,7 +163,11 @@ class Disassembler:
                 f'Warning: will skip chunk of unknown type {group_name}'
             )
             return _DummyChunk(group_args, label)
-        # We have a valid group.
+        # We have a valid group. Is the `start` aligned to the group's spec?
+        MISALIGNED_CHUNK.require(
+            not start % group.alignment,
+            where=start, align=group.alignment
+        )
         interpreter = _InterpreterWrapper(group_name, group, group_config)
         tag = f'Structgroup {group_name} (chunk starting at 0x{start:X})'
         unpack_chain = self._filter_library.unpack_chain(
