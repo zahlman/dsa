@@ -1,10 +1,9 @@
 # Copyright (C) 2018-2020 Karl Knechtel
 # Licensed under the Open Software License version 3.0
 
-from .common import dsa_entrypoint, get_data, load_language
-from .dsa import assemble
+from .common import dsa_entrypoint, get_data
 from .tracing import my_tracer
-from ..disassembly import Disassembler
+from ..language import Language
 
 
 """Interface to disassembler."""
@@ -58,11 +57,11 @@ def verify_assembly(chunks, data):
 )
 def dsd(binary, root, output, paths, verify=False):
     data = get_data(binary)
-    groups, filters = load_language(paths)
+    my_language = Language.load(paths)
     group_name, _, position = root.partition(':')
     position = int(position, 0)
     with my_tracer('Disassembling'):
-        Disassembler(data, groups, filters, group_name, position)(output)
+        my_language.disassemble(data, group_name, position, output)
     if verify:
         with my_tracer('Reassembling for verification'):
-            verify_assembly(assemble(output, groups, filters), data)
+            verify_assembly(my_language.assemble(output), data)

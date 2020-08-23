@@ -10,10 +10,6 @@ from ..parsing.source_loader import SourceLoader
 """Interface to assembler."""
 
 
-def assemble(outfilename, groups, filters):
-    return load_files([outfilename], SourceLoader, groups, filters)
-
-
 def apply(chunks, data):
     data = bytearray(data)
     last, expanded = 0, 0
@@ -42,9 +38,9 @@ def apply(chunks, data):
 )
 def dsa(binary, source, paths, output=None):
     data = get_data(binary)
-    groups, filters = load_language(paths)
+    my_language = language.load(paths)
     with my_tracer('Assembling'):
-        result = apply(assemble(source, groups, filters), data)
+        result = apply(my_language.assemble(source), data)
     with my_tracer('Writing to output'):
         with open(binary if output is None else output, 'wb') as f:
             f.write(result)
