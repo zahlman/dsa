@@ -1,3 +1,8 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
+# This file is a reference output for a test.
+# Blank lines, and lines starting with #, will be ignored in comparison.
+
 !@main 0x0 example
 !
-

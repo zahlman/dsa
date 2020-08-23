@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
 from .disassembly import Disassembler
 from .filters import FilterLibrary
 from .ui.location import folder
