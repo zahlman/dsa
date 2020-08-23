@@ -62,6 +62,7 @@ class StructGroup:
         self._terminator = options.terminator
         self._graph = _normalized_graph(graph, options.first)
         self._label_data = options.labels, options.label_offset
+        self._align = options.align
         counted = self._count is not None
         terminated = self._terminator is not None
         has_last = not all(self._graph.values())
@@ -113,6 +114,11 @@ class StructGroup:
             required=self._count
         )
         return b'' if self._terminator is None else self._terminator
+
+
+    @property
+    def alignment(self):
+        return self._align
 
 
     def assemble(self, lines):

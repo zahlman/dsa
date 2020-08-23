@@ -63,3 +63,6 @@ def assemble(lines):
         encoding, text = _string_line(line)
         result.extend(text.encode(encoding))
     return bytes(result)
+
+
+align = 1

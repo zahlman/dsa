@@ -71,3 +71,6 @@ def assemble(lines):
         with open(_sanitize(name, ext), 'rb') as f:
             result.extend(f.read())
     return bytes(result)
+
+
+align = 1

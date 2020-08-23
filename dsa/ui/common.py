@@ -10,7 +10,7 @@ from ..parsing.file_parsing import load_files, load_files_into, load_lines
 from ..parsing.path_loader import PathLoader
 from ..parsing.structgroup_loader import StructGroupLoader
 from ..parsing.type_loader import TypeLoader
-from ..plugins import is_function, load_plugins
+from ..plugins import is_function, is_integer, load_plugins
 from datetime import datetime
 import sys, traceback
 from epmanager import entrypoint, DefaultParser
@@ -67,13 +67,12 @@ def _load_structgroups(interpreters, enums, types, paths):
 
 @my_tracer('Loading interpreters')
 def _load_interpreters(paths):
-    method_names = '__init__', 'assemble', 'disassemble', 'item_size'
-    property_names = 'alignment',
     return load_plugins(
         paths['interpreters'], {
             'assemble': is_function,
             'disassemble': is_function,
-            'item_size': is_function
+            'item_size': is_function,
+            'align': is_integer
         }
     )
 
