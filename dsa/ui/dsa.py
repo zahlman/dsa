@@ -1,8 +1,9 @@
 # Copyright (C) 2018-2020 Karl Knechtel
 # Licensed under the Open Software License version 3.0
 
-from .common import dsa_entrypoint, get_data, load_language
+from .common import dsa_entrypoint, get_data
 from .tracing import my_tracer
+from ..language import Language
 from ..parsing.file_parsing import load_files
 from ..parsing.source_loader import SourceLoader
 
@@ -38,7 +39,7 @@ def apply(chunks, data):
 )
 def dsa(binary, source, paths, output=None):
     data = get_data(binary)
-    my_language = language.load(paths)
+    my_language = Language.load(paths)
     with my_tracer('Assembling'):
         result = apply(my_language.assemble(source), data)
     with my_tracer('Writing to output'):
