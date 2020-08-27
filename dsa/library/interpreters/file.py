@@ -73,4 +73,4 @@ def assemble(lines):
     return bytes(result)
 
 
-align = 1
+alignment = 1
