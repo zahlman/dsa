@@ -3,7 +3,6 @@
 
 from .disassembly import Disassembler
 from .filters import FilterLibrary
-from .ui.location import folder
 from .ui.tracing import my_tracer
 from .ui.usefiles import fixed_roots
 from .parsing.file_parsing import load_files, load_files_into, load_lines
@@ -12,6 +11,7 @@ from .parsing.source_loader import SourceLoader
 from .parsing.structgroup_loader import StructGroupLoader
 from .parsing.type_loader import TypeLoader
 from .plugins import is_function, load_plugins
+from pathlib import Path
 
 
 _DEFAULT_PATHS = [
@@ -29,11 +29,11 @@ _DEFAULT_PATHS = [
 
 def _load_paths(pathfile):
     roots = fixed_roots()
-    return (
-        load_lines(_DEFAULT_PATHS, PathLoader, roots, None)
-        if pathfile is None
-        else load_files([pathfile], PathLoader, roots, folder(pathfile))
-    )
+    if pathfile is None:
+        return load_lines(_DEFAULT_PATHS, PathLoader, roots, None)
+    else:
+        pathfile = Path(pathfile).absolute()
+        return load_files([pathfile], PathLoader, roots, pathfile.parent)
 
 
 _INTERPRETER_SPEC = {

@@ -14,7 +14,6 @@ repository = "https://github.com/zahlman/dsa"
 documentation = "https://github.com/zahlman/dsa"
 
 [tool.poetry.scripts]
-whereisdsa = "dsa.ui.location:display.invoke"
 dsa-use = "dsa.ui.usefiles:use_files.invoke"
 dsa-drop = "dsa.ui.usefiles:drop_files.invoke"
 dsa = "dsa.ui.dsa:dsa.invoke"
