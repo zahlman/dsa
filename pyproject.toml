@@ -22,7 +22,7 @@ dsd = "dsa.ui.dsd:dsd.invoke"
 
 [tool.poetry.dependencies]
 python = "^3.6"
-epmanager = "^0.7.4"
+epmanager = "^0.7.5"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
