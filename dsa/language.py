@@ -78,7 +78,5 @@ class Language:
 
 
     # TODO fix this interface
-    def disassemble(self, data, group_name, position, output):
-        Disassembler(
-            data, self._interpreters, self._filters, group_name, position
-        )(output)
+    def disassemble(self, data, root_info, output):
+        Disassembler(data, self._interpreters, self._filters, root_info)(output)

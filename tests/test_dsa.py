@@ -2,7 +2,7 @@
 # Licensed under the Open Software License version 3.0
 
 # System under test.
-from dsa.ui.dsd import dsd
+from dsa.ui.dsd import dsd, root_data
 from dsa.errors import UserError
 # Standard library.
 import os, shutil
@@ -59,24 +59,28 @@ def test_input(environment):
     assert list(data) == list(range(256))
 
 
+def _dsd_wrapper(root_text, output, paths):
+    dsd('test.bin', root_data(root_text), output, paths)
+
+
 def test_disassemble_hexdump(environment):
-    dsd('test.bin', 'hex:0', 'test_hex.txt', None)
+    _dsd_wrapper('hex:0', 'test_hex.txt', None)
     _validate('test_hex')
 
 
 def test_disassemble_partial(environment):
-    dsd('test.bin', 'hex:0x81', 'test_hex_partial.txt', None)
+    _dsd_wrapper('hex:0x81', 'test_hex_partial.txt', None)
     _validate('test_hex_partial')
 
 
 def test_use_local(capsys, environment):
     # It uses the local config when and only when requested.
     # Values are little-endian.
-    dsd('test.bin', 'example:0', 'test_example.txt', 'lib/paths.txt')
+    _dsd_wrapper('example:0', 'test_example.txt', 'lib/paths.txt')
     _validate('test_example')
     # When the local config isn't available, it disassembles empty blocks
     # and displays a warning.
-    dsd('test.bin', 'example:0', 'test_example2.txt', None)
+    _dsd_wrapper('example:0', 'test_example2.txt', None)
     outtxt = capsys.readouterr().out
     assert 'Warning: will skip chunk of unknown type example' in outtxt
     _validate('test_example2')
@@ -85,10 +89,10 @@ def test_use_local(capsys, environment):
 def test_consider_align(environment):
     # It respects the 'align' specified in the structgroup.
     with pytest.raises(UserError):
-        dsd('test.bin', 'example:3', 'test_example3.txt', 'lib/paths.txt')
+        _dsd_wrapper('example:3', 'test_example3.txt', 'lib/paths.txt')
 
 
 def test_signedness(environment):
     # It properly considers the signedness of types.
-    dsd('test.bin', 'example:4', 'test_example3.txt', 'lib/paths.txt')
+    _dsd_wrapper('example:4', 'test_example3.txt', 'lib/paths.txt')
     _validate('test_example3')

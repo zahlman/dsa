@@ -43,11 +43,16 @@ def verify_assembly(chunks, data):
     )))
 
 
+def root_data(text):
+    name, *params, location = text.split(':')
+    return (name, params, int(location, 0)) # let exception propagate for now
+
+
 @dsa_entrypoint(
     description='Data Structure Assembler - disassembly mode',
     message='Running DSD',
     output='output file name',
-    root='structgroup name and offset for root chunk, e.g. `example:0x123`',
+    root='interpreter name/params/offset for root chunk, e.g. `example:0x123`',
     binary='source binary file to disassemble from',
     _verify={
         'help': 'try re-assembling the output and comparing to the source',
@@ -55,13 +60,11 @@ def verify_assembly(chunks, data):
     },
     _paths='name of input file containing path config info'
 )
-def dsd(binary, root, output, paths, verify=False):
+def dsd(binary, root:root_data, output, paths, verify=False):
     data = get_data(binary)
     my_language = Language.load(paths)
-    group_name, _, position = root.partition(':')
-    position = int(position, 0)
     with my_tracer('Disassembling'):
-        my_language.disassemble(data, group_name, position, output)
+        my_language.disassemble(data, root, output)
     if verify:
         with my_tracer('Reassembling for verification'):
             verify_assembly(my_language.assemble(output), data)

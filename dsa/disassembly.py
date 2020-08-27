@@ -122,8 +122,7 @@ class _Chunk:
 
 class Disassembler:
     def __init__(
-        self, source, group_lookup, filter_library,
-        root_group_name, root_location
+        self, source, group_lookup, filter_library, root_data
     ):
         self._source = source
         self._group_lookup = group_lookup
@@ -131,8 +130,11 @@ class Disassembler:
         self._chunks = {} # position -> Chunk (disassembled or pending)
         self._pending = set() # positions of pending Chunks
         self._labels = set() # string label names of Chunks
-        # For now, no parameters for the root group.
-        self._register((root_group_name,), (), root_location, 'main')
+        # Using normal tokenization rules is probably not desirable.
+        # Just split the "root" data on colons, use the last for the location,
+        # and others for name and parameters.
+        root_name, root_params, root_location = root_data
+        self._register((root_name, *root_params), (), root_location, 'main')
 
 
     def _make_label(self, base):
