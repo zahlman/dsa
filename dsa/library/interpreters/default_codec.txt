@@ -1,0 +1,22 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
+# This is a resource file used by the `string` interpreter.
+# It specifies the interpretation of codes in [square brackets]
+# embedded within the output strings. These can be translated to/from
+# arbitrary binary data, even if that data would not be valid in the
+# character encoding being used.
+# This file is lexed the same way as type and structgroup files, but
+# the interpretation is up to `string.py`.
+
+# Null terminators will not be represented in the output.
+# We should allow them in input, assembling to zero bytes.
+[] false X
+# When a '\n' appears in the source, represent it with a code
+# and start a new string in the disassembly.
+0A true NL
+# Represent square brackets with square-bracket escapes.
+5B false Open
+5D false Close
+# Any single bytes not recognized by the specified text encoding
+# will also be square-bracket-escaped; this is hard-coded behaviour.
