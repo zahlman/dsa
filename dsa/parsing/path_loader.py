@@ -27,7 +27,9 @@ _PATH_TYPES = {
     'interpreters': 'py',
     'types': 'txt',
     'structgroups': 'txt',
-    'filters': 'py'
+    'filters': 'py',
+    'codec_code': 'py',
+    'codec_data': 'txt'
 }
 
 

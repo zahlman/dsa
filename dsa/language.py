@@ -1,6 +1,7 @@
 # Copyright (C) 2018-2020 Karl Knechtel
 # Licensed under the Open Software License version 3.0
 
+from .codecs import make_codec_library
 from .disassembly import Disassembler
 from .filters import FilterLibrary
 from .ui.tracing import my_tracer
@@ -23,6 +24,10 @@ _DEFAULT_PATHS = [
     'structgroups',
     '    **',
     'filters',
+    '    **',
+    'codec_code',
+    '    **',
+    'codec_data',
     '    **'
 ]
 
@@ -54,13 +59,16 @@ def _load(paths):
         )
     with my_tracer('Loading filters'):
         filters = FilterLibrary(paths['filters'])
-    return Language(interpreters, filters)
+    with my_tracer('Loading codecs'):
+        codecs = make_codec_library(paths['codec_code'], paths['codec_data'])
+    return Language(interpreters, filters, codecs)
 
 
 class Language:
-    def __init__(self, interpreters, filters):
+    def __init__(self, interpreters, filters, codecs):
         self._interpreters = interpreters
         self._filters = filters
+        self._codecs = codecs
 
 
     @staticmethod
@@ -73,10 +81,13 @@ class Language:
 
     def assemble(self, source):
         return load_files(
-            [source], SourceLoader, self._interpreters, self._filters
+            [source], SourceLoader,
+            self._interpreters, self._filters, self._codecs
         )
 
 
     # TODO fix this interface
     def disassemble(self, data, root_info, output):
-        Disassembler(data, self._interpreters, self._filters, root_info)(output)
+        Disassembler(
+            data, self._interpreters, self._filters, self._codecs, root_info
+        )(output)

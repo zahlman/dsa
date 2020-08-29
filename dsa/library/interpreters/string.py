@@ -139,11 +139,12 @@ class CodecLoader:
 
 
 
-def disassemble(config, chunk_label, data, register, label_ref):
+def disassemble(codec_lookup, config, chunk_label, data, register, label_ref):
     """Produce formatted file contents for the chunk.
     In this case, we produce a line with a filename, and write the file;
     we ignore the `register` and `label_ref` callbacks completely since the
     file contents will not be examined for pointers or labels.
+    `codec_lookup` -> library of codecs that might be useful here.
     `config` -> additional parameters specified by the Pointer to the chunk.
     `chunk_label` -> label that will be applied to the chunk.
     `data` -> underlying chunk data.
@@ -161,7 +162,7 @@ def item_size(token):
     return 0
 
 
-def assemble(lines):
+def assemble(codec_lookup, lines):
     """Produce raw data representing the chunk for the binary.
     The `lines` have already had labels resolved."""
     raise NotImplementedError

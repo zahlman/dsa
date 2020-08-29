@@ -30,20 +30,20 @@ class _InterpreterWrapper:
         return (self._name, *self._config)
 
 
-    def disassemble(self, label, data, register, label_ref):
+    def disassemble(self, codec_lookup, label, data, register, label_ref):
         return self._impl.disassemble(
-            self._config, label, data, register, label_ref
+            codec_lookup, self._config, label, data, register, label_ref
         )
 
 
-def _group_header(label, location, name):
+def _chunk_header(label, location, name):
     return ('!', ('@', label), (f'0x{location:X}',), (name,))
 
 
 class _DummyChunk:
-    def __init__(self, group_args, label):
-        # We might have "unrecognized" group args that we need to check later.
-        self._group_args = group_args
+    def __init__(self, interpreter_args, label):
+        # We might have "unrecognized" args that we need to check later.
+        self._interpreter_args = interpreter_args
         self._label = label
 
 
@@ -59,30 +59,30 @@ class _DummyChunk:
 
     def verify_args(self, args, where):
         CHUNK_TYPE_CONFLICT.require(
-            args == self._group_args, where=where,
-            previous=', '.join(self._group_args), current=', '.join(args)
+            args == self._interpreter_args, where=where,
+            previous=', '.join(self._interpreter_args), current=', '.join(args)
         )
 
 
-    def load(self, register, label_ref):
+    def load(self, codec_lookup, register, label_ref):
         pass
 
 
     def tokens(self, location):
-        name = '' if self._group_args is None else self._group_args[0]
-        yield _group_header(self._label, location, name)
+        name = '' if self._interpreter_args is None else self._interpreter_args[0]
+        yield _chunk_header(self._label, location, name)
         yield ('!',)
         yield ('',)
 
 
 class _Chunk:
-    def __init__(self, group_args, interpreter, tag, unpack_chain, label):
+    def __init__(self, interpreter_args, interpreter, tag, unpack_chain, label):
         assert isinstance(interpreter, _InterpreterWrapper)
         self._interpreter = interpreter
         self._tag, self._label = tag, label
         self._data, self._filter_info = unpack_chain.data, unpack_chain.info
         self._lines, self._size = None, 0
-        self._group_args = group_args # remembered for diagnostics.
+        self._interpreter_args = interpreter_args # remembered for diagnostics.
 
 
     @property # read-only
@@ -98,15 +98,15 @@ class _Chunk:
     def verify_args(self, args, where):
         # FIXME: Does it make sense to handle this the same way?
         CHUNK_TYPE_CONFLICT.require(
-            args == self._group_args, where=where,
-            previous=', '.join(self._group_args), current=', '.join(args)
+            args == self._interpreter_args, where=where,
+            previous=', '.join(self._interpreter_args), current=', '.join(args)
         )
 
 
-    def load(self, register, label_ref):
+    def load(self, codec_lookup, register, label_ref):
         self._size, self._lines = wrap_errors(
             self._tag, self._interpreter.disassemble,
-            self._label, self._data, register, label_ref
+            codec_lookup, self._label, self._data, register, label_ref
         )
 
 
@@ -114,7 +114,7 @@ class _Chunk:
         lines, size = self._filter_info(self._size)
         yield from lines # filters
         name = self._interpreter.name
-        yield _group_header(self._label, location, name) # interpreter
+        yield _chunk_header(self._label, location, name) # interpreter
         yield from self._lines # chunk
         yield ('!', (f'# 0x{location+size:X}',))
         yield ('',)
@@ -122,11 +122,12 @@ class _Chunk:
 
 class Disassembler:
     def __init__(
-        self, source, group_lookup, filter_library, root_data
+        self, source, interpreter_lookup, filter_library, codec_lookup, root_data
     ):
         self._source = source
-        self._group_lookup = group_lookup
+        self._interpreter_lookup = interpreter_lookup
         self._filter_library = filter_library
+        self._codec_lookup = codec_lookup
         self._chunks = {} # position -> Chunk (disassembled or pending)
         self._pending = set() # positions of pending Chunks
         self._labels = set() # string label names of Chunks
@@ -153,38 +154,38 @@ class Disassembler:
         return position, self._chunks[position]
 
 
-    def _init_chunk(self, group_args, filter_specs, start, label):
-        if group_args is None: # no referent was specified at all
+    def _init_chunk(self, interpreter_args, filter_specs, start, label):
+        if interpreter_args is None: # no referent was specified at all
             # so we just set up a labelled, empty block.
-            return _DummyChunk(group_args, label)
+            return _DummyChunk(interpreter_args, label)
         # Otherwise, try to create an interpreter wrapper.
-        group_name, *group_config = group_args
-        group = self._group_lookup.get(group_name, None)
-        if group is None:
+        interpreter_name, *interpreter_config = interpreter_args
+        interpreter = self._interpreter_lookup.get(interpreter_name, None)
+        if interpreter is None:
             my_tracer.trace(
-                f'Warning: will skip chunk of unknown type {group_name}'
+                f'Warning: will skip chunk of unknown type {interpreter_name}'
             )
-            return _DummyChunk(group_args, label)
-        # We have a valid group. Is the `start` aligned to the group's spec?
+            return _DummyChunk(interpreter_args, label)
+        # We have a valid interpreter. Is the `start` aligned to its spec?
         MISALIGNED_CHUNK.require(
-            not start % group.alignment,
-            where=start, align=group.alignment
+            not start % interpreter.alignment,
+            where=start, align=interpreter.alignment
         )
-        interpreter = _InterpreterWrapper(group_name, group, group_config)
-        tag = f'Structgroup {group_name} (chunk starting at 0x{start:X})'
+        interpreter = _InterpreterWrapper(interpreter_name, interpreter, interpreter_config)
+        tag = f'Interpreter {interpreter_name} (chunk starting at 0x{start:X})'
         unpack_chain = self._filter_library.unpack_chain(
             self._source, start, filter_specs
         )
-        return _Chunk(group_args, interpreter, tag, unpack_chain, label)
+        return _Chunk(interpreter_args, interpreter, tag, unpack_chain, label)
 
 
-    def _register(self, group_args, filter_specs, location, label_base):
+    def _register(self, interpreter_args, filter_specs, location, label_base):
         if location in self._chunks:
-            self._chunks[location].verify_args(group_args, location)
+            self._chunks[location].verify_args(interpreter_args, location)
             return
         label = self._make_label(label_base)
         self._chunks[location] = self._init_chunk(
-            group_args, filter_specs, location, label
+            interpreter_args, filter_specs, location, label
         )
         self._pending.add(location)
         self._labels.add(label)
@@ -205,5 +206,5 @@ class Disassembler:
 
     def __call__(self, outfilename):
         for position, chunk in iter(self._next_chunk, None):
-            chunk.load(self._register, self._label_ref)
+            chunk.load(self._codec_lookup, self._register, self._label_ref)
         output_file(outfilename, self._all_tokens())

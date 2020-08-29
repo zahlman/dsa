@@ -121,7 +121,9 @@ class StructGroup:
         return self._align
 
 
-    def assemble(self, lines):
+    def assemble(self, codec_lookup, lines):
+        # The codec_lookup is ignored, since structgroup-based interpreters
+        # don't use codecs.
         previous = None
         result = bytearray()
         for i, line in enumerate(lines, 1):
@@ -166,8 +168,10 @@ class StructGroup:
 
 
     # Get the disassembled lines for a chunk and the corresponding chunk size.
-    def disassemble(self, config, chunk_label, data, register, label_ref):
-        # `config` is ignored.
+    def disassemble(
+        self, codec_lookup, config, chunk_label, data, register, label_ref
+    ):
+        # `codec_lookup` and `config` are ignored.
         previous = None
         offset = 0
         lines = []

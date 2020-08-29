@@ -12,12 +12,8 @@ class UNRECOGNIZED_LABEL(MappingError):
     """unrecognized label `{key}`"""
 
 
-class UNNAMED_GROUP(UserError):
+class UNNAMED_INTERPRETER(UserError):
     """{name} chunk contains data and there is no interpreter for it"""
-
-
-class LABEL_PARAMS(UserError):
-    """chunk-internal label may not have parameters"""
 
 
 class UNCLOSED_CHUNK(UserError):
@@ -29,19 +25,11 @@ class OUTSIDE_CHUNK(UserError):
 
 
 class NO_CHUNK_DEFINITION(UserError):
-    """chunk has no group/chunk name line"""
+    """chunk has no definition line (names the chunk and its interpreter)"""
 
 
 class BAD_EMPTY_TOKEN(UserError):
     """empty token not allowed at beginning of line"""
-
-
-class UNSUPPORTED_GROUP(UserError):
-    """`{name}` group is unsupported"""
-
-
-class TOO_MANY_ATS(UserError):
-    """unrecognized directive; may have at most two @ signs"""
 
 
 class LABEL_CONFLICT(MappingError):
@@ -62,19 +50,19 @@ def _resolve_labels(line, label_lookup):
     ]
 
 
-class _DummyGroup:
-    """A fake group that works only if the chunk is empty, producing b''."""
+class _DummyInterpreter:
+    """A fake interpreter that works only for empty chunks, producing b''."""
     def __init__(self, name):
         self._name = name
 
 
     def assemble(self, lines):
-        UNNAMED_GROUP.require(not lines, name=self._name)
+        UNNAMED_INTERPRETER.require(not lines, name=self._name)
         return b''
 
 
     def item_size(self, name):
-        raise UNNAMED_GROUP(name=self._name)
+        raise UNNAMED_INTERPRETER(name=self._name)
 
 
 _chunk_header_parser = line_parser(
@@ -105,7 +93,7 @@ class Chunk:
     def __init__(self):
         self._location = None
         self._filters = [] # (name, tokens) filter specs.
-        self._group = None
+        self._interpreter = None
         self._chunk_label = None
         self._lines = []
         self._labels = [] # (token for label, position) assuming unfiltered.
@@ -115,8 +103,8 @@ class Chunk:
 
 
     @property
-    def has_group(self):
-        return self._group is not None
+    def has_interpreter(self):
+        return self._interpreter is not None
 
 
     @property
@@ -124,17 +112,17 @@ class Chunk:
         return self._labels
 
 
-    def _set_group(self, tokens, group_lookup):
-        UNCLOSED_CHUNK.require(not self.has_group)
-        chunk_label, location, group_name = _chunk_header_parser(tokens)
-        group = group_lookup.get(group_name, None)
-        if group is None:
-            group = _DummyGroup(chunk_label[1])
-            if group_name:
+    def _set_interpreter(self, tokens, interpreter_lookup):
+        UNCLOSED_CHUNK.require(not self.has_interpreter)
+        chunk_label, location, name = _chunk_header_parser(tokens)
+        interpreter = interpreter_lookup.get(interpreter_name, None)
+        if interpreter is None:
+            interpreter = _DummyInterpreter(chunk_label[1])
+            if name:
                 trace = my_tracer.trace
-                trace(f'Warning: unrecognized interpreter name `{group_name}`.')
+                trace(f'Warning: unrecognized interpreter name `{name}`.')
                 trace('This will cause an error later if the chunk has data.')
-        self._group = group
+        self._interpreter = interpreter
         self._labels.append((chunk_label, location))
         self._chunk_label, self._location = chunk_label, location
 
@@ -144,11 +132,11 @@ class Chunk:
         self._filters.append((name, tokens))
 
 
-    def add_meta(self, group_lookup, tokens):
+    def add_meta(self, interpreter_lookup, tokens):
         BAD_EMPTY_TOKEN.require(bool(tokens[0])) # start with empty?
         if tokens[0][0] == '@':
-            # first token is a label, i.e. group intro.
-            self._set_group(tokens, group_lookup)
+            # first token is a label, i.e. chunk intro.
+            self._set_interpreter(tokens, interpreter_lookup)
         else:
             self._add_filter(tokens)
 
@@ -162,32 +150,33 @@ class Chunk:
 
     def _add_struct(self, tokens):
         self._lines.append(tokens)
-        self._offset += self._group.item_size(tokens[0])
+        self._offset += self._interpreter.item_size(tokens[0])
 
 
-    def add_line(self, group_lookup, tokens):
+    def add_line(self, interpreter_lookup, tokens):
         BAD_EMPTY_TOKEN.require(bool(tokens[0]))
         # not needed for labels, but disallow them outside the header.
-        OUTSIDE_CHUNK.require(self._group is not None)
+        OUTSIDE_CHUNK.require(self._interpreter is not None)
         if tokens[0][0] == '@':
             self._add_label(tokens)
         else:
             self._add_struct(tokens)
 
 
-    def complete(self, pack_all, label_lookup):
+    def complete(self, pack_all, label_lookup, codec_lookup):
         lines = [_resolve_labels(line, label_lookup) for line in self._lines]
         return self._location, pack_all(
-            self._group.assemble(lines), self._filters
+            self._interpreter.assemble(codec_lookup, lines), self._filters
         )
 
 
 class SourceLoader(SimpleLoader):
-    def __init__(self, structgroups, filter_library):
+    def __init__(self, interpreter_library, filter_library, codec_library):
         self._chunks = []
         self._current = None # either None or the last of the self._chunks.
-        self._group_lookup = structgroups
+        self._interpreter_lookup = interpreter_library
         self._pack_all = filter_library.pack_all
+        self._codec_lookup = codec_library
 
 
     def _get_labels(self):
@@ -203,15 +192,15 @@ class SourceLoader(SimpleLoader):
             self._current = Chunk()
             self._chunks.append(self._current)
         if not tokens: # terminator.
-            NO_CHUNK_DEFINITION.require(self._current.has_group)
+            NO_CHUNK_DEFINITION.require(self._current.has_interpreter)
             self._current = None
         else:
-            self._current.add_meta(self._group_lookup, tokens)
+            self._current.add_meta(self._interpreter_lookup, tokens)
 
 
     def unindented(self, tokens):
         OUTSIDE_CHUNK.require(self._current is not None)
-        self._current.add_line(self._group_lookup, tokens)
+        self._current.add_line(self._interpreter_lookup, tokens)
     indented = unindented # alias; handle both cases the same way
 
 
@@ -219,6 +208,8 @@ class SourceLoader(SimpleLoader):
         processed = {}
         label_lookup = self._get_labels()
         for chunk in self._chunks:
-            key, value = chunk.complete(self._pack_all, label_lookup)
+            key, value = chunk.complete(
+                self._pack_all, label_lookup, self._codec_lookup
+            )
             DUPLICATE_CHUNK_LOCATION.add_unique(processed, key, value)
         return processed
