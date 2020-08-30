@@ -65,7 +65,7 @@ def load_lines(lines, make_loader, *args, **kwargs):
 def load_files(filenames, make_loader, *args, **kwargs):
     loader = make_loader(*args, **kwargs)
     for filename in filenames:
-        with open(filename) as f:
+        with open(filename, encoding='utf-8') as f:
             feed(f'File `{filename}`', loader.line, process(f))
     return loader.result()
 
@@ -74,7 +74,7 @@ def load_files_into(result, filenames, make_loader, *args, **kwargs):
     for filename in filenames:
         loader = make_loader(*args, **kwargs)
         label = os.path.splitext(os.path.basename(filename))[0]
-        with open(filename) as f:
+        with open(filename, encoding='utf-8') as f:
             feed(f'File `{filename}`', loader.line, process(f))
         DUPLICATE_FILE.add_unique(result, label, loader.result())
 

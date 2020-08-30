@@ -78,6 +78,6 @@ def output_file(filename, lines, compact=False):
     The prefix must either be '+', '!' or whitespace (possibly empty).
     `compact` -> if true, use ':' to join multi-part tokens instead of ', '
     """
-    with open(filename, 'w') as f:
+    with open(filename, 'w', encoding='utf-8') as f:
         for line in lines:
             _output_line(f, *line, compact=compact)
