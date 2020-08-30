@@ -162,7 +162,7 @@ def item_size(token):
     return 0
 
 
-def assemble(codec_lookup, lines):
+def assemble(codec_lookup, config, lines):
     """Produce raw data representing the chunk for the binary.
     The `lines` have already had labels resolved."""
     raise NotImplementedError

@@ -121,9 +121,9 @@ class StructGroup:
         return self._align
 
 
-    def assemble(self, codec_lookup, lines):
-        # The codec_lookup is ignored, since structgroup-based interpreters
-        # don't use codecs.
+    def assemble(self, codec_lookup, config, lines):
+        # The codec_lookup and config are ignored, since structgroup-based
+        # interpreters don't use codecs.
         previous = None
         result = bytearray()
         for i, line in enumerate(lines, 1):

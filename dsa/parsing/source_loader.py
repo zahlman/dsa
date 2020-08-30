@@ -69,8 +69,7 @@ _chunk_header_parser = line_parser(
     'chunk info',
     make_parser('label', ({'@'}, 'at'), ('string', 'name')),
     single_parser('position', 'integer'),
-    # No facility for parameters to the interpreter when assembling.
-    single_parser('interpreter', 'string?'),
+    single_parser('interpreter', '[string'),
     required=2
 )
 
@@ -100,6 +99,7 @@ class Chunk:
         # The token is stored as a tuple since it's used for dict lookup.
         # TODO: ensure filters won't corrupt label info.
         self._offset = 0
+        self._config = None
 
 
     @property
@@ -114,8 +114,10 @@ class Chunk:
 
     def _set_interpreter(self, tokens, interpreter_lookup):
         UNCLOSED_CHUNK.require(not self.has_interpreter)
-        chunk_label, location, name = _chunk_header_parser(tokens)
-        interpreter = interpreter_lookup.get(interpreter_name, None)
+        chunk_label, location, interpreter_info = _chunk_header_parser(tokens)
+        name, *config = interpreter_info
+        self._config = config
+        interpreter = interpreter_lookup.get(name, None)
         if interpreter is None:
             interpreter = _DummyInterpreter(chunk_label[1])
             if name:
@@ -166,7 +168,9 @@ class Chunk:
     def complete(self, pack_all, label_lookup, codec_lookup):
         lines = [_resolve_labels(line, label_lookup) for line in self._lines]
         return self._location, pack_all(
-            self._interpreter.assemble(codec_lookup, lines), self._filters
+            self._interpreter.assemble(
+                codec_lookup, self._config, lines
+            ), self._filters
         )
 
 

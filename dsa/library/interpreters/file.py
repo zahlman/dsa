@@ -61,7 +61,7 @@ def item_size(token):
     return os.stat(_file_name_token(token)).st_size
 
 
-def assemble(codec_lookup, lines):
+def assemble(codec_lookup, config, lines):
     """Produce raw data representing the chunk for the binary.
     The `lines` have already had labels resolved.
     When assembling, we allow multiple file names - one per line -
