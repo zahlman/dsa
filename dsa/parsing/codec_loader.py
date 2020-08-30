@@ -37,7 +37,7 @@ class CodecLoader(SimpleLoader):
     def meta(self, tokens):
         if self._current_subloader is not None:
             DUPLICATE_CODEC.add_unique(
-                self._results, 
+                self._results,
                 self._current_name, self._current_subloader.result()
             )
         self._current_name, subloader_name = _parse_meta(tokens)
@@ -53,4 +53,9 @@ class CodecLoader(SimpleLoader):
 
 
     def result(self):
+        if self._current_subloader is not None:
+            DUPLICATE_CODEC.add_unique(
+                self._results,
+                self._current_name, self._current_subloader.result()
+            )
         return self._results
