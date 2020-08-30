@@ -37,7 +37,7 @@ class _InterpreterWrapper:
 
 
 def _chunk_header(label, location, name):
-    return ('!', ('@', label), (f'0x{location:X}',), (name,))
+    return ('!', ('@', label), (f'0x{location:X}',), name)
 
 
 class _DummyChunk:
@@ -69,7 +69,7 @@ class _DummyChunk:
 
 
     def tokens(self, location):
-        name = '' if self._interpreter_args is None else self._interpreter_args[0]
+        name = '' if self._interpreter_args is None else self._interpreter_args
         yield _chunk_header(self._label, location, name)
         yield ('!',)
         yield ('',)
@@ -82,7 +82,7 @@ class _Chunk:
         self._tag, self._label = tag, label
         self._data, self._filter_info = unpack_chain.data, unpack_chain.info
         self._lines, self._size = None, 0
-        self._interpreter_args = interpreter_args # remembered for diagnostics.
+        self._interpreter_args = interpreter_args
 
 
     @property # read-only
@@ -113,7 +113,7 @@ class _Chunk:
     def tokens(self, location):
         lines, size = self._filter_info(self._size)
         yield from lines # filters
-        name = self._interpreter.name
+        name = self._interpreter_args
         yield _chunk_header(self._label, location, name) # interpreter
         yield from self._lines # chunk
         yield ('!', (f'# 0x{location+size:X}',))
