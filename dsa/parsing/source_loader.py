@@ -56,7 +56,7 @@ class _DummyInterpreter:
         self._name = name
 
 
-    def assemble(self, lines):
+    def assemble(self, codec_lookup, config, lines):
         UNNAMED_INTERPRETER.require(not lines, name=self._name)
         return b''
 
