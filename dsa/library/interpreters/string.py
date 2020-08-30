@@ -64,7 +64,7 @@ def assemble(codec_lookup, config, lines):
     encoding, codec_name = _parse_config(config)
     codec = NO_SUCH_CODEC.get(codec_lookup, codec_name)
     return b''.join(
-        codec.encode(line, encoding)
+        codec.encode(_string_line(line)[0], encoding)
         for line in lines
     )
 
