@@ -9,9 +9,7 @@ from .ui.tracing import my_tracer
 
 def make_codec_library(code_paths, data_paths):
     with my_tracer('Setting up codec loaders'):
-        my_tracer.trace(code_paths)
         loader_spec = (is_class_with, {'line': is_method, 'result': is_method})
         subloaders = load_plugins(code_paths, {'Loader': loader_spec})
     with my_tracer('Creating codecs from config data'):
-        my_tracer.trace(data_paths)
         return load_files(data_paths, CodecLoader, subloaders)
