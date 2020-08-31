@@ -168,6 +168,7 @@ class Chunk:
     def complete(self, pack_all, label_lookup, codec_lookup):
         lines = [_resolve_labels(line, label_lookup) for line in self._lines]
         return self._location, pack_all(
+            codec_lookup,
             self._interpreter.assemble(
                 codec_lookup, self._config, lines
             ), self._filters

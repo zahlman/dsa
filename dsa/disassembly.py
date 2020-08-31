@@ -174,7 +174,7 @@ class Disassembler:
         interpreter = _InterpreterWrapper(interpreter_name, interpreter, interpreter_config)
         tag = f'Interpreter {interpreter_name} (chunk starting at 0x{start:X})'
         unpack_chain = self._filter_library.unpack_chain(
-            self._source, start, filter_specs
+            self._codec_lookup, self._source, start, filter_specs
         )
         return _Chunk(interpreter_args, interpreter, tag, unpack_chain, label)
 

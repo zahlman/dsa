@@ -19,14 +19,14 @@ class PACK_FAILED(UserError):
     """packing failed: {reason}"""
 
 
-def _load_unpacked_data(cls, data, params):
+def _load_unpacked_data(cls, codec_lookup, data, params):
     # Capture UserErrors in either the constructor or the property.
-    view = cls(data, *params)
+    view = cls(codec_lookup, data, *params)
     return view, view.data
 
 
 class _UnpackChain:
-    def __init__(self, binary, offset, unpackers):
+    def __init__(self, codec_lookup, binary, offset, unpackers):
         # Chunk reading is initially unlimited from the `offset` point.
         data = memoryview(binary)[offset:]
         self._views = []
@@ -34,7 +34,8 @@ class _UnpackChain:
         # appears in the data description. We unpack data in this order.
         for name, cls, params in unpackers:
             view, data = wrap_errors(
-                f'Filter `{name}`', _load_unpacked_data, cls, data, params
+                f'Filter `{name}`',
+                _load_unpacked_data, cls, codec_lookup, data, params
             )
             self._views.append((name, view))
         self._data = data # result of the last step.
@@ -91,11 +92,11 @@ class FilterLibrary:
         )
 
 
-    def pack_all(self, data, specs):
+    def pack_all(self, codec_lookup, data, specs):
         for name, params in reversed(specs):
             module = UNKNOWN_FILTER.get(self._filters, name)
             data = wrap_errors(
-                f'Filter `{name}`', module.pack, data,
+                f'Filter `{name}`', module.pack, codec_lookup, data,
                 *_build_parser(name, module.pack_args)(params)
             )
         # Enforce that pack() functions do the right thing.
@@ -109,8 +110,8 @@ class FilterLibrary:
         return name, module.View, parser
 
 
-    def unpack_chain(self, binary, offset, specs):
+    def unpack_chain(self, codec_lookup, binary, offset, specs):
         return _UnpackChain(
-            binary, offset,
+            codec_lookup, binary, offset,
             [self._unpacker(*_spec_parser(spec)) for spec in specs]
         )

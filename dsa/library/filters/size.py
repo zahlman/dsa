@@ -31,7 +31,7 @@ unpack_args = ('chunk size limit', 'integer?')
 # Converts a chunk of data into the form it takes in the binary, e.g.
 # by applying compression, encryption etc. Any parameters after the first are
 # taken from the @ line in the data description file that specified the filter.
-def pack(data, size):
+def pack(codec_lookup, data, size):
     padding = size - len(data)
     TOO_MUCH_DATA.require(padding >= 0, actual=len(data), expected=size)
     return data + bytes(padding)
@@ -40,7 +40,7 @@ def pack(data, size):
 # Provides a view into the original source data from a specified base
 # location onwards, as if it had never been pack()ed.
 class View:
-    def __init__(self, data, limit):
+    def __init__(self, codec_lookup, data, limit):
         # If a size is specified, disallow access past that point.
         self._data = memoryview(data)[:limit]
         self._infer = limit is None
