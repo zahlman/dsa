@@ -1,0 +1,144 @@
+This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License. To view a copy of this license, visit https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+Definitions
+-----------
+
+A **language** is a Python class instance that encapsulates the logic and
+business rules needed to assemble or disassemble binary data with DSA.
+
+A **library** is a hierarchical folder of .py and/or .txt files which DSA can
+use to create languages. At the top level, one or more of the
+following folders should be present:
+
+    * `codec_code`: contains .py files with logic for loading codecs.
+    * `codec_data`: contains .txt files with codec configuration data.
+    * `filters`: contains .py files implementing filter logic.
+    * `interpreters`: contains .py files implementing custom logic for
+      assembling or disassembling a single chunk of the source data.
+    * `structgroups`: contains .txt files that specify data structures used to
+      create interpreters which use the standard logic.
+    * `types`: contains .txt files that specify data type used to create
+      interpreters which use the standard logic.
+
+The **system library** is a library within the DSA installation, located in
+the `library/` subdirectory.
+
+A **target** is a symbolic name used to filter the contents of library
+folders. It specifies relative paths within each of the top-level folders of
+the library that will be searched for .py or .txt files (according to which
+top-level folder it is). When constructing a language, the same set of
+relative paths is used in each top-level folder, of each library used.
+
+A **catalog** is a TOML file named `catalog.toml` which specifies targets and
+library paths. This is normally placed at the root of a library, such that
+`'.'` can be specified as a library path. Note, however, that a catalog may
+describe more than one library.
+
+The default catalog
+-------------------
+
+At installation, the system library does not contain a catalog. When needed, a
+catalog will be generated, which looks like:
+
+[sys]
+paths = "."
+default = true
+
+[sys.targets]
+* = [ "**" ]
+
+Catalog syntax
+--------------
+
+Table names are arbitrary; each table name becomes a library name that can be
+referenced when starting DSA. The `.path` of the table indicates the root
+directory for the library with that name. For each of the `.targets`, one or
+more glob patterns are supplied for the intervening folders to search. The
+patterns for the special target `'*'` are additionally used for all targets.
+The `.default` property is optional and will be explained below.
+
+For example, in the default catalog, the glob pattern `./filters/**/*.py` will
+be used to search for filters. `.` comes from the library path; `filters` from
+the fact that we are searching for filters; `**` from the `sys.targets`
+configuration; `*.py` from the fact that filters are implemented as `.py`
+files.
+
+The target system is useful if you want to maintain related library files for
+multiple disassembly projects. Suppose you have two binary files A and B,
+which need both common and binary-specific library configuration. You can set
+up a library with a folder structure along the lines of:
+
+    my_library/
+        catalog.toml
+        codec_code/
+            common_loader.py
+            A/
+                A_loader.py
+            B/
+                B_loader.py
+        codec_data/
+            common_codecs.txt
+            A/
+                A_codecs.txt
+            B/
+                B_codecs.txt
+        # etc. for filters, interpreters, structgroups and types
+
+and then describe the library thus:
+
+[my_library]
+path = "."
+
+[my_library.targets]
+A = ['', 'A/**']
+B = ['', 'B/**']
+
+or alternatively:
+
+[my_library]
+path = "."
+
+[my_library.targets]
+* = ['']
+A = ['A/**']
+B = ['B/**']
+
+Note that the target paths are specific to the library; the '*' target specified
+in the system library will not interfere.
+
+dsa-use and dsa-drop
+--------------------
+
+The `dsa-use` utility adds information from a specified catalog.toml to the
+system library's catalog. This allows command-line invocations to use the
+named libraries, without having direct access to the catalog.
+
+The `dsa-drop` utility removes a named library from the system library's
+catalog. Note that this does not necessarily undo a given use of `dsa-use`.
+
+Using libraries and targets
+---------------------------
+
+The `dsa` and `dsd` commands allow for specifying one or more library names
+(with `-l` or `--libraries`) and optionally a target (with `-t` or
+`--target`). The resulting language merges results from the given libraries;
+if a target is specified, each library is filtered accordingly.
+
+You can also specify a catalog.toml to use with the `-c` or `--catalog`
+option. 
+
+Libraries that were described with a true value for `.default` in the catalog
+will be used even if not specified on the command line. This means that the
+system library will normally always be used; however, you can override this
+with a custom catalog.toml.
+
+For example, suppose we have used `dsa-add` to add the above catalog to the
+system catalog, and then run `dsa my_source.txt my_binary.bin -l my_library -t
+A`. The resulting library will use the system library, as well as e.g.
+`my_library/codec_code/common_loader.py` and
+`my_library/codec_code/A_loader.py`, but **not**
+`my_library/codec_code/B_loader.py`.
+
+If instead of adding the catalog with `dsa-add`, we specify the catalog
+explicitly, like `dsa my_source.txt my_library.bin -l my_library -c
+my_library/catalog.toml -t A`, the system library will not be used.
