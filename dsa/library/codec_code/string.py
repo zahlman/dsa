@@ -3,7 +3,7 @@
 
 from dsa.errors import MappingError, UserError
 from dsa.parsing.line_parsing import line_parser
-from dsa.parsing.token_parsing import single_parser
+from dsa.parsing.token_parsing import make_parser, single_parser
 import codecs
 from io import BytesIO, StringIO
 import re
@@ -13,8 +13,12 @@ class UNRECOGNIZED_TAG(MappingError):
     """Unknown tag `{key}`"""
 
 
-class BAD_LABEL_NAME(UserError):
-    """Explicitly provided label name may not start with `0x`"""
+class WRONG_PARAM_COUNT(UserError):
+    """`{name}` tag expects `{need}` parameters (got `{got}`)"""
+
+
+class BAD_ARGUMENT(UserError):
+    """Tag argument must be either a positive integer or one of `{param}` (not `{arg}`)"""
 
 
 _tag_splitter = re.compile(r'(\[.*?\])')
@@ -22,16 +26,25 @@ _tag_splitter = re.compile(r'(\[.*?\])')
 
 _parse_codec_line = line_parser(
     '`string` codec entry',
-    single_parser('byte pattern', 'hexdump'),
-    single_parser('linewrap', {'true': True, 'false': False}),
-    single_parser('label', 'string')
+    make_parser(
+        'line start',
+        ('hexdump', 'byte pattern'),
+        ({'newline': True, None: False}, 'is EOL?')
+    ),
+    single_parser('tag label', 'string?'),
+    more=True
+)
+_parse_param = make_parser(
+    'tag parameter',
+    ('integer', 'number of bytes used'),
+    ('[string', 'labels for options')
 )
 
 
-def _read_single(output, data, mapping, size, stream, reader):
+def _read_single(output, data, mapping, sizes, stream, reader):
     start = stream.tell()
-    for amount in range(size, 0, -1):
-        data = stream.read(amount)
+    for size in sizes:
+        data = stream.read(size)
         try:
             code, newline = mapping[data].decode_from(stream)
             output.write(code)
@@ -50,14 +63,14 @@ def _read_single(output, data, mapping, size, stream, reader):
     return False
 
 
-def _decode_gen(data, mapping, encoding):
+def _decode_gen(data, bound, mapping, encoding):
     stream = BytesIO(data)
     end = len(data)
-    size = max(len(k) for k in mapping)
     reader = codecs.getreader(encoding)(stream)
     output = StringIO()
+    sizes = range(max(len(k) for k in mapping), bound, -1)
     while stream.tell() < end:
-        do_newline = _read_single(output, data, mapping, size, stream, reader)
+        do_newline = _read_single(output, data, mapping, sizes, stream, reader)
         if do_newline:
             yield output.getvalue()
             output.seek(0)
@@ -65,22 +78,33 @@ def _decode_gen(data, mapping, encoding):
     yield output.getvalue()
 
 
+def _process_tag(mapping, tag_name):
+    if tag_name.startswith('0x'):
+        return UNRECOGNIZED_TAG.convert(
+            ValueError, bytes.fromhex, tag_name[2:]
+        )
+    pieces = tag_name.split()
+    for label_count in range(len(pieces), 0, -1):
+        try:
+            code = mapping[' '.join(pieces[:label_count])]
+        except KeyError:
+            continue
+        else:
+            return code.encode_with(pieces[label_count:])
+    UNRECOGNIZED_TAG.require(False, key=tag_name)
+
+
 def _encode_gen(line, mapping, encoding):
     for component in _tag_splitter.split(line):
         if not component.startswith('['):
             yield component.encode(encoding)
             continue
-        tag_name = component[1:-1]
-        if tag_name.startswith('0x'):
-            yield UNRECOGNIZED_TAG.convert(
-                ValueError, bytes.fromhex, tag_name[2:]
-            )
-        else:
-            yield UNRECOGNIZED_TAG.get(mapping, component[1:-1]).encode_with(())
+        yield _process_tag(mapping, component[1:-1])
 
 
 class Codec:
-    def __init__(self, decode_mapping, encode_mapping):
+    def __init__(self, allow_zero, decode_mapping, encode_mapping):
+        self._bound = -1 if allow_zero else 0
         self._decode_mapping = decode_mapping
         self._encode_mapping = encode_mapping
 
@@ -88,7 +112,9 @@ class Codec:
     def decode(self, data, encoding):
         return [
             ('', (repr(token),))
-            for token in _decode_gen(data, self._decode_mapping, encoding)
+            for token in _decode_gen(
+                data, self._bound, self._decode_mapping, encoding
+            )
         ]
 
 
@@ -97,26 +123,48 @@ class Codec:
 
 
 class TextCode:
-    def __init__(self, raw, linewrap, label):
+    def __init__(self, raw, linewrap, label, params):
         self._raw = raw
-        BAD_LABEL_NAME.require(not label.startswith('0x'))
-        self._template = f'[{label}]'
+        self._sizes, self._options = (), ()
         self._linewrap = linewrap
-        self._params = () # stub
+        self._name = label
+        if label is None:
+            assert not params
+            self._template = f'[0x{raw.hex()}]'
+            return
+        if params:
+            self._sizes, self._options = zip(*(_parse_param(l) for l in params))
+        template = ' {}' * len(self._sizes)
+        self._template = f'[{label}{template}]'
 
 
     def decode_from(self, stream):
+        raw = [
+            int.from_bytes(stream.read(size), 'little') for size in self._sizes
+        ]
+        values = [
+            option[v] if v < len(option) else str(v)
+            for option, v in zip(self._options, raw)
+        ]
         # TODO: allow the tag to be parametrized, reading from `stream`.
-        return self._template, self._linewrap
+        return self._template.format(*values), self._linewrap
 
 
     def encode_with(self, values):
-        # TODO: allow the tag to be parametrized, encoding the `values`.
-        if len(self._params) != len(values):
-            raise ValueError('incorrect number of parameters')
-        return self._raw + b''.join(
-            p.format(v) for p, v in zip(self._params, values)
-        )
+        assert self._name is not None # should have been handled earlier.
+        need, got = len(self._options), len(values)
+        WRONG_PARAM_COUNT.require(need==got, name=self._name, need=need, got=got)
+        result = bytearray(self._raw)
+        for param, arg, size in zip(self._options, values, self._sizes):
+            try:
+                value = int(arg, 0)
+                if value < 0:
+                    raise ValueError # require positive value
+            except ValueError:
+                BAD_ARGUMENT.require(arg in param, arg=arg, param=param)
+                value = param.index(arg)
+            result.extend(value.to_bytes(size, 'little'))
+        return bytes(result)
 
 
 # The codec loader interface consists of a Loader class. It works like
@@ -125,16 +173,21 @@ class TextCode:
 # not considered meaningful).
 class Loader:
     def __init__(self):
+        self._allow_zero = False
         self._decode_mapping = {}
         self._encode_mapping = {}
 
 
     def line(self, tokens):
-        raw, linewrap, label = _parse_codec_line(tokens)
-        code = TextCode(raw, linewrap, label)
+        (raw, linewrap), label, params = _parse_codec_line(tokens)
+        code = TextCode(raw, linewrap, label, params)
+        if params and not raw:
+            # We specified a tag with zero fixed bytes but with params.
+            # Therefore, when decoding, we need to look for zero-byte tags.
+            self._allow_zero = True
         self._decode_mapping[raw] = code
         self._encode_mapping[label] = code
 
 
     def result(self):
-        return Codec(self._decode_mapping, self._encode_mapping)
+        return Codec(self._allow_zero, self._decode_mapping, self._encode_mapping)
