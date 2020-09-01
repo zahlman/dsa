@@ -26,15 +26,20 @@ def _read_catalog(lib_root):
         return _DEFAULT_CATALOG, _LIBRARY
 
 
-def _read_sys_catalog():
+def read_sys_catalog():
     path = Path(__file__).absolute().parent / 'library'
     try:
         return toml.load(path / 'catalog.toml')
     except FileNotFoundError:
         data = {'sys': str(path)}
-        with open(path / 'catalog.toml', 'w') as f:
-            toml.dump(data, f)
+        write_sys_catalog(data)
         return data
+
+
+def write_sys_catalog(lookup):
+    path = Path(__file__).absolute().parent / 'library'
+    with open(path / 'catalog.toml', 'w') as f:
+        toml.dump(lookup, f)
 
 
 def _normalize(catalog, catalog_root):
@@ -85,7 +90,7 @@ class PathSearcher:
         if not libraries:
             libraries = {'sys'}
         library_roots = {Path(p).resolve() for p in paths}
-        lookup = {k: Path(v).resolve() for k, v in _read_sys_catalog().items()}
+        lookup = {k: Path(v).resolve() for k, v in read_sys_catalog().items()}
         for library in libraries:
             try:
                 library_roots.add(lookup[library])
