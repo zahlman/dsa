@@ -7,19 +7,20 @@ from pathlib import Path
 
 
 _LIBRARY = Path(__file__).absolute().parent / 'library'
-_CATALOG_PATH = _LIBRARY / 'catalog.toml'
 _DEFAULT_CATALOG = {
     'sys': {'path': '.', 'default': True, 'targets': {'*': ('**',)}}
 }
 
 
-def _read_catalog(name):
-    if name is not None:
-        return toml.load(name), Path(name).parent
+def _read_catalog(lib_root):
+    if lib_root is not None:
+        lib_root = Path(lib_root).absolute()
+        return toml.load(lib_root / 'catalog.toml'), lib_root
+    catalog_path = _LIBRARY / 'catalog.toml'
     try:
-        return toml.load(_CATALOG_PATH), _LIBRARY
+        return toml.load(catalog_path), _LIBRARY
     except FileNotFoundError:
-        with open(_CATALOG_PATH, 'w') as f:
+        with open(catalog_path, 'w') as f:
             toml.dump(_DEFAULT_CATALOG, f)
         return _DEFAULT_CATALOG, _LIBRARY
 
@@ -55,4 +56,5 @@ def get_paths(search_paths, kind):
     }[kind]
     for root, search_path in search_paths:
         glob_path = str(root / kind / search_path / f'*.{ext}')
-        yield from glob(glob_path, recursive=True)
+        for path in glob(glob_path, recursive=True):
+            yield Path(path)
