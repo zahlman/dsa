@@ -26,6 +26,17 @@ def _read_catalog(lib_root):
         return _DEFAULT_CATALOG, _LIBRARY
 
 
+def _read_sys_catalog():
+    path = Path(__file__).absolute().parent / 'library'
+    try:
+        return toml.load(path / 'catalog.toml')
+    except FileNotFoundError:
+        data = {'sys': str(path)}
+        with open(path / 'catalog.toml', 'w') as f:
+            toml.dump(data, f)
+        return data
+
+
 def _normalize(catalog, catalog_root):
     return (
         (
@@ -36,6 +47,21 @@ def _normalize(catalog, catalog_root):
         )
         for name, library in catalog.items()
     )
+
+
+def _path_info(library_root, target):
+    try:
+        with open(library_root / 'targets.toml') as f:
+            targets = toml.load(f)
+    except FileNotFoundError:
+        targets = {}
+        my_tracer.trace(
+            f'Skipping library root `{library_root}`: no targets.toml found'
+        )
+    if '*' in targets:
+        yield from targets['*']
+    if target not in {None, '*'} and target in targets:
+        yield from targets[target]
 
 
 class PathSearcher:
@@ -52,6 +78,25 @@ class PathSearcher:
     @where.setter
     def where(self, value):
         self._where = set(value)
+
+
+    @staticmethod
+    def create(libraries, paths, target):
+        if not libraries:
+            libraries = {'sys'}
+        library_roots = {Path(p).resolve() for p in paths}
+        lookup = {k: Path(v).resolve() for k, v in _read_sys_catalog().items()}
+        for library in libraries:
+            try:
+                library_roots.add(lookup[library])
+            except KeyError:
+                my_tracer.trace(f'Skipping library `{library}`: unknown name')
+        result = PathSearcher(*(
+            (library_root, fragment)
+            for library_root in library_roots
+            for fragment in _path_info(library_root, target)
+        ))
+        return result
 
 
     @staticmethod

@@ -108,6 +108,16 @@ class Language:
 
     @staticmethod
     @my_tracer('Loading language')
+    def create(libraries, paths, target):
+        with my_tracer('Loading definition paths'):
+            search = PathSearcher.create(libraries, paths, target)
+        return Language(
+            _interpreters(search), _filters(search), _codecs(search)
+        )
+
+
+    @staticmethod
+    @my_tracer('Loading language')
     def from_catalog(catalog_dir, lib_names, target_name):
         with my_tracer('Loading definition paths'):
             search = PathSearcher.from_catalog(

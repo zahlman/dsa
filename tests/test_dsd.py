@@ -29,8 +29,8 @@ def test_input(environment):
     assert list(data) == list(range(256))
 
 
-def _dsd_wrapper(root_text, output, paths=None):
-    dsd('test.bin', root_data(root_text), output, paths=paths)
+def _dsd_wrapper(root_text, output, *paths):
+    dsd('test.bin', root_data(root_text), output, target='dsd', paths=paths)
 
 
 def test_disassemble_hexdump(environment):
@@ -46,7 +46,7 @@ def test_disassemble_partial(environment):
 def test_use_local(capsys, environment):
     # It uses the local config when and only when requested.
     # Values are little-endian.
-    _dsd_wrapper('0:example', 'test_example.txt', 'lib/paths.txt')
+    _dsd_wrapper('0:example', 'test_example.txt', 'lib')
     _validate(environment[1], 'test_example')
     # When the local config isn't available, it disassembles empty blocks
     # and displays a warning.
@@ -59,10 +59,10 @@ def test_use_local(capsys, environment):
 def test_consider_align(environment):
     # It respects the 'align' specified in the structgroup.
     with pytest.raises(UserError):
-        _dsd_wrapper('3:example', 'test_example3.txt', 'lib/paths.txt')
+        _dsd_wrapper('3:example', 'test_example3.txt', 'lib')
 
 
 def test_signedness(environment):
     # It properly considers the signedness of types.
-    _dsd_wrapper('4:example', 'test_example3.txt', 'lib/paths.txt')
+    _dsd_wrapper('4:example', 'test_example3.txt', 'lib')
     _validate(environment[1], 'test_example3')

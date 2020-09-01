@@ -58,11 +58,16 @@ def root_data(text):
         'help': 'try re-assembling the output and comparing to the source',
         'action': 'store_true'
     },
-    _paths='name of input file containing path config info'
+    _libraries={'help': 'symbolic names of libraries to use', 'nargs': '*'},
+    _paths={'help': 'paths to roots of libraries to use', 'nargs': '*'},
+    _target='target language to build from libraries'
 )
-def dsd(binary, root:root_data, output, paths, verify=False):
+def dsd(
+    binary, root:root_data, output, verify=False,
+    libraries=(), paths=(), target=None
+):
+    my_language = Language.create(libraries, paths, target)
     data = get_data(binary)
-    my_language = Language.load(paths)
     with my_tracer('Disassembling'):
         my_language.disassemble(data, root, output)
     if verify:
