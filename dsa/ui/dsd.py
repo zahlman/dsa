@@ -66,8 +66,8 @@ def dsd(
     binary, root:root_data, output, verify=False,
     libraries=(), paths=(), target=None
 ):
-    my_language = Language.create(libraries, paths, target)
     data = get_data(binary)
+    my_language = Language.create(libraries, paths, target)
     with my_tracer('Disassembling'):
         my_language.disassemble(data, root, output)
     if verify:

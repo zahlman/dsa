@@ -32,14 +32,16 @@ def apply(chunks, data):
 @dsa_entrypoint(
     description='Data Structure Assembler - assembly mode',
     message='Running DSA...',
-    source='name of file to assemble',
     binary='source binary file to assemble into',
+    source='name of file to assemble',
     _output='binary file to write (if not overwriting source)',
-    _paths='name of input file containing path config info'
+    _libraries={'help': 'symbolic names of libraries to use', 'nargs': '*'},
+    _paths={'help': 'paths to roots of libraries to use', 'nargs': '*'},
+    _target='target language to build from libraries'
 )
-def dsa(binary, source, paths, output=None):
+def dsa(binary, source, output=None, libraries=(), paths=(), target=None):
     data = get_data(binary)
-    my_language = Language.load(paths)
+    my_language = Language.create(libraries, paths, target)
     with my_tracer('Assembling'):
         result = apply(my_language.assemble(source), data)
     with my_tracer('Writing to output'):
