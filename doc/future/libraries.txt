@@ -1,4 +1,6 @@
-This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License. To view a copy of this license, visit https://creativecommons.org/licenses/by-nc-sa/4.0/
+This work is licensed under the Creative Commons
+Attribution-NonCommercial-ShareAlike 4.0 International License. To view a copy
+of this license, visit https://creativecommons.org/licenses/by-nc-sa/4.0/ .
 
 Definitions
 -----------
@@ -41,11 +43,11 @@ At installation, the system library does not contain a catalog. When needed, a
 catalog will be generated, which looks like:
 
 [sys]
-paths = "."
+path = "."
 default = true
 
 [sys.targets]
-* = [ "**" ]
+"*" = [ "**",]
 
 Catalog syntax
 --------------
