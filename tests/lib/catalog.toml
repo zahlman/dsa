@@ -1,0 +1,13 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
+[test1.targets]
+# For all targets, check the top-level directories.
+* = [""]
+# Recurse into 'A' for target A; ignore 'B'.
+A = ["A/**"]
+
+[test2.targets]
+# Similarly, but don't ever use the top level.
+A = ["A"] # Don't recurse for target A.
+B = ["B/**"]

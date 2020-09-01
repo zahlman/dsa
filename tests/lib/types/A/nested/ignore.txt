@@ -1,0 +1,5 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
+# Tests that .txt files are ignored in .py library dirs.
+This is definitely not valid syntax for a DSA text file: "\\

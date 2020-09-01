@@ -1,0 +1,5 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
+# This file is not found for the "test2" library, but does not include
+# breaking code so that it silently has no effect in other tests.
