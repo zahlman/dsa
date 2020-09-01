@@ -1,6 +1,7 @@
 # Copyright (C) 2018-2020 Karl Knechtel
 # Licensed under the Open Software License version 3.0
 
+import dsa
 from os import chdir
 from pathlib import Path
 from shutil import rmtree, copytree
@@ -29,6 +30,10 @@ def environment(tmp_path):
         with open('test.bin', 'wb') as data:
             data.write(bytes(range(256)))
         copytree(src / 'lib', 'lib')
-        yield Path(tmp_path), src / 'expected'
+        yield (
+            Path(tmp_path).absolute(), # location for testing
+            src / 'expected', # location of stored reference results
+            Path(dsa.__file__).absolute().parent # location of installed code
+        )
     finally:
         chdir(old_path)

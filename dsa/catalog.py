@@ -2,6 +2,7 @@
 # Licensed under the Open Software License version 3.0
 
 import toml
+from functools import partial
 from glob import glob
 from pathlib import Path
 
@@ -37,24 +38,41 @@ def _normalize(catalog, catalog_root):
     )
 
 
-def get_search_paths(catalog_name, lib_names, target_name):
-    target_names = ('*',) if target_name is None else ('*', target_name)
-    catalog = _normalize(*_read_catalog(catalog_name))
-    return [
-        (root, path)
-        for name, root, default, lib_targets in catalog
-        if (name in lib_names) or default
-        for name in target_names
-        for path in lib_targets.get(name, ())
-    ]
+class PathSearcher:
+    # Writing this as a class seems a bit more convenient for testing.
+    def __init__(self, *where):
+        self.where = where
 
 
-def get_paths(search_paths, kind):
-    ext = {
-        'codec_code': 'py', 'codec_data': 'txt', 'filters': 'py',
-        'interpreters': 'py', 'structgroups': 'txt', 'types': 'txt'
-    }[kind]
-    for root, search_path in search_paths:
-        glob_path = str(root / kind / search_path / f'*.{ext}')
-        for path in glob(glob_path, recursive=True):
-            yield Path(path)
+    @property
+    def where(self):
+        return self._where
+
+
+    @where.setter
+    def where(self, value):
+        self._where = set(value)
+
+
+    @staticmethod
+    def from_catalog(catalog_name, library_names, target_name):
+        target_names = ('*',) if target_name is None else ('*', target_name)
+        catalog = _normalize(*_read_catalog(catalog_name))
+        return PathSearcher(*(
+            (root, fragment)
+            for library_name, root, default, library_targets in catalog
+            if (library_name in library_names) or default
+            for target_name in target_names
+            for fragment in library_targets.get(target_name, ())
+        ))
+
+
+    def __call__(self, kind):
+        ext = {
+            'codec_code': 'py', 'codec_data': 'txt', 'filters': 'py',
+            'interpreters': 'py', 'structgroups': 'txt', 'types': 'txt'
+        }[kind]
+        for root, fragment in self.where:
+            glob_path = str(root / kind / fragment / f'*.{ext}')
+            for path in glob(glob_path, recursive=True):
+                yield Path(path)
