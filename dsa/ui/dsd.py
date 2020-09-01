@@ -44,16 +44,16 @@ def verify_assembly(chunks, data):
 
 
 def root_data(text):
-    name, *params, location = text.split(':')
-    return (name, params, int(location, 0)) # let exception propagate for now
+    location, name, *params = text.split(':')
+    return (name, params, int(location, 0))
 
 
 @dsa_entrypoint(
     description='Data Structure Assembler - disassembly mode',
     message='Running DSD',
-    output='output file name',
-    root='interpreter name/params/offset for root chunk, e.g. `example:0x123`',
     binary='source binary file to disassemble from',
+    root='offset and interpreter name/params for root chunk, e.g. `0x123:example:param`',
+    output='output file name',
     _verify={
         'help': 'try re-assembling the output and comparing to the source',
         'action': 'store_true'

@@ -29,28 +29,28 @@ def test_input(environment):
     assert list(data) == list(range(256))
 
 
-def _dsd_wrapper(root_text, output, paths):
-    dsd('test.bin', root_data(root_text), output, paths)
+def _dsd_wrapper(root_text, output, paths=None):
+    dsd('test.bin', root_data(root_text), output, paths=paths)
 
 
 def test_disassemble_hexdump(environment):
-    _dsd_wrapper('hex:0', 'test_hex.txt', None)
+    _dsd_wrapper('0:hex', 'test_hex.txt')
     _validate(environment[1], 'test_hex')
 
 
 def test_disassemble_partial(environment):
-    _dsd_wrapper('hex:0x81', 'test_hex_partial.txt', None)
+    _dsd_wrapper('0x81:hex', 'test_hex_partial.txt')
     _validate(environment[1], 'test_hex_partial')
 
 
 def test_use_local(capsys, environment):
     # It uses the local config when and only when requested.
     # Values are little-endian.
-    _dsd_wrapper('example:0', 'test_example.txt', 'lib/paths.txt')
+    _dsd_wrapper('0:example', 'test_example.txt', 'lib/paths.txt')
     _validate(environment[1], 'test_example')
     # When the local config isn't available, it disassembles empty blocks
     # and displays a warning.
-    _dsd_wrapper('example:0', 'test_example2.txt', None)
+    _dsd_wrapper('0:example', 'test_example2.txt')
     outtxt = capsys.readouterr().out
     assert 'Warning: will skip chunk of unknown type example' in outtxt
     _validate(environment[1], 'test_example2')
@@ -59,10 +59,10 @@ def test_use_local(capsys, environment):
 def test_consider_align(environment):
     # It respects the 'align' specified in the structgroup.
     with pytest.raises(UserError):
-        _dsd_wrapper('example:3', 'test_example3.txt', 'lib/paths.txt')
+        _dsd_wrapper('3:example', 'test_example3.txt', 'lib/paths.txt')
 
 
 def test_signedness(environment):
     # It properly considers the signedness of types.
-    _dsd_wrapper('example:4', 'test_example3.txt', 'lib/paths.txt')
+    _dsd_wrapper('4:example', 'test_example3.txt', 'lib/paths.txt')
     _validate(environment[1], 'test_example3')

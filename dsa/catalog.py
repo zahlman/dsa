@@ -16,8 +16,8 @@ _DEFAULT_CATALOG = {
 def _read_catalog(lib_root):
     if lib_root is not None:
         lib_root = Path(lib_root).absolute()
-        return toml.load(lib_root / 'catalog.toml'), lib_root
-    catalog_path = _LIBRARY / 'catalog.toml'
+        return toml.load(lib_root / 'catalog_legacy.toml'), lib_root
+    catalog_path = _LIBRARY / 'catalog_legacy.toml'
     try:
         return toml.load(catalog_path), _LIBRARY
     except FileNotFoundError:

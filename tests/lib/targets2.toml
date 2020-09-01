@@ -1,0 +1,6 @@
+# Copyright (C) 2018-2020 Karl Knechtel
+# Licensed under the Open Software License version 3.0
+
+# Don't ever use the top level.
+A = ["A"] # Don't recurse for target A.
+B = ["B/**"] # Recurse for target B.

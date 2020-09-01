@@ -5,4 +5,4 @@
 types
     **
 structgroups ./structgroups
-    **
+    dsd/**
