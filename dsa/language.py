@@ -79,6 +79,32 @@ class Language:
         return _load(paths)
 
 
+    @staticmethod
+    @my_tracer('Loading language')
+    def from_catalog(catalog_dir, lib_names, target_name):
+        with my_tracer('Loading definition paths'):
+            paths = get_search_paths(catalog_dir, lib_names, target_name)
+            resolve_paths = lambda kind: get_paths(paths, kind)
+        with my_tracer('Loading interpreters'):
+            interpreters = load_plugins(
+                resolve_paths('interpreters'), _INTERPRETER_SPEC
+            )
+        with my_tracer('Loading types'):
+            type_data = load_files(resolve_paths('types'), TypeLoader)
+        with my_tracer('Loading structgroups'):
+            load_files_into(
+                interpreters, resolve_paths('structgroups'),
+                StructGroupLoader, *type_data
+            )
+        with my_tracer('Loading filters'):
+            filters = FilterLibrary(resolve_paths('filters'))
+        with my_tracer('Loading codecs'):
+            codecs = make_codec_library(
+                resolve_paths('codec_code'), resolve_paths('codec_data')
+            )
+        return Language(interpreters, filters, codecs)
+
+
     def assemble(self, source):
         return load_files(
             [source], SourceLoader,
