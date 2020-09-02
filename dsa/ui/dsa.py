@@ -4,8 +4,6 @@
 from .common import dsa_entrypoint, get_data
 from .tracing import my_tracer
 from ..language import Language
-from ..parsing.file_parsing import load_files
-from ..parsing.source_loader import SourceLoader
 
 
 """Interface to assembler."""
