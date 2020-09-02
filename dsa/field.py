@@ -7,10 +7,6 @@ from .parsing.line_parsing import argument_parser, line_parser
 from .parsing.token_parsing import make_parser, single_parser
 
 
-class UNALIGNED_POINTER(UserError):
-    """cannot refer to this address (wrong alignment)"""
-
-
 class TEXT_BYTES(UserError):
     """Text field size in bits must be a multiple of 8"""
 

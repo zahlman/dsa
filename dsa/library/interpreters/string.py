@@ -2,12 +2,9 @@
 # Licensed under the Open Software License version 3.0
 
 from dsa.errors import MappingError
-from dsa.parsing.file_parsing import load_files_into
 from dsa.parsing.line_parsing import line_parser
 from dsa.parsing.token_parsing import make_parser, single_parser
 import codecs
-from io import BytesIO, StringIO
-from pathlib import Path
 import re
 
 
@@ -19,12 +16,6 @@ _parse_config = make_parser(
     '`string` interpreter parameters',
     ('string', 'encoding'),
     ('string', 'codec'),
-)
-_parse_codec_line = line_parser(
-    '`string` codec entry',
-    single_parser('byte pattern', 'hexdump'),
-    single_parser('linewrap', {'true': True, 'false': False}),
-    single_parser('label', 'string')
 )
 _string_line = line_parser(
     '`string` data line', single_parser('content', 'string'), required=1

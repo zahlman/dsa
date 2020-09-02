@@ -4,7 +4,6 @@
 from .errors import SequenceError, UserError
 from .parsing.line_parsing import line_parser, token_splitter
 from .parsing.token_parsing import make_parser, single_parser
-from functools import partial
 import re
 
 

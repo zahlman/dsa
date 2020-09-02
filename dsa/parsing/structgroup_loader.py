@@ -18,10 +18,6 @@ class NO_ALIGN(MappingError):
     """`align` must be specified for structgroup"""
 
 
-class BAD_MEMBER(UserError):
-    """not enough or too many tokens for member specification"""
-
-
 class DUPLICATE_STRUCT(MappingError):
     """duplicate struct definition for {key}"""
 

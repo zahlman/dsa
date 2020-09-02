@@ -1,7 +1,7 @@
 # Copyright (C) 2018-2020 Karl Knechtel
 # Licensed under the Open Software License version 3.0
 
-from .errors import wrap as wrap_errors, MappingError, UserError
+from .errors import wrap as wrap_errors, MappingError
 from .parsing.line_parsing import line_parser
 from .parsing.token_parsing import single_parser
 from .plugins import exists, is_class_with, is_function, is_method, is_property, load_plugins
@@ -9,14 +9,6 @@ from .plugins import exists, is_class_with, is_function, is_method, is_property,
 
 class UNKNOWN_FILTER(MappingError):
     """unknown filter `{key}`"""
-
-
-class VIEW_CREATION_FAILED(UserError):
-    """could not create a view with {name} filter"""
-
-
-class PACK_FAILED(UserError):
-    """packing failed: {reason}"""
 
 
 def _load_unpacked_data(cls, codec_lookup, data, params):

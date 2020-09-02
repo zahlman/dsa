@@ -133,10 +133,6 @@ def _make_seq(converter, it):
 
 
 # Main parsing machinery.
-def _add(x, y):
-    return None if (x is None or y is None) else x + y
-
-
 def _check(low, high, name, token):
     actual = len(token)
     allowed = f'at least {low}' if high is None else f'{low}-{high}'
