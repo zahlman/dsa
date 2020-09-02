@@ -30,7 +30,10 @@ def test_input(environment):
 
 
 def _dsd_wrapper(root_text, output, *paths):
-    dsd('test.bin', root_data(root_text), output, target='dsd', paths=paths)
+    dsd(
+        'test.bin', root_data(root_text), output,
+        target='dsd', libraries=('sys',), paths=paths
+    )
 
 
 def test_disassemble_hexdump(environment):

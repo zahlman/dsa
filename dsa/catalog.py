@@ -87,7 +87,7 @@ class PathSearcher:
 
     @staticmethod
     def create(libraries, paths, target):
-        if not libraries:
+        if not (libraries or paths):
             libraries = {'sys'}
         library_roots = {Path(p).resolve() for p in paths}
         lookup = {k: Path(v).resolve() for k, v in read_sys_catalog().items()}

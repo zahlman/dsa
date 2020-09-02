@@ -22,8 +22,8 @@ def _dummy_setup(x, y, z):
 
 
 def test_uses_catalog(environment, monkeypatch):
-    monkeypatch.setattr(dsa.language.PathSearcher, 'from_catalog', _dummy_setup)
-    language = dsa.language.Language.from_catalog(1, 2, 3)
+    monkeypatch.setattr(dsa.language.PathSearcher, 'create', _dummy_setup)
+    language = dsa.language.Language.create(1, 2, 3)
     # Every search is performed.
     assert _dummy_search.called_with == {
         'codec_code', 'codec_data', 'filters',
