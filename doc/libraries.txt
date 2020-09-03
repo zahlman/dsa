@@ -5,12 +5,12 @@ of this license, visit https://creativecommons.org/licenses/by-nc-sa/4.0/ .
 Definitions
 -----------
 
-A **language** is a Python class instance that encapsulates the logic and
+A *language* is a Python class instance that encapsulates the logic and
 business rules needed to assemble or disassemble binary data with DSA.
 
-A **library** is a folder with data used by DSA to construct languages. It
-must have a configuration file named `targets.toml` at its root, and should
-have one or more of the following folders:
+A *library* is a folder with data used by DSA to construct languages. It must
+have a configuration file named `targets.toml` at its root, and should have
+one or more of the following folders:
 
     * `codec_code`: contains .py files with logic for loading codecs.
     * `codec_data`: contains .txt files with codec configuration data.
@@ -24,15 +24,15 @@ have one or more of the following folders:
 
 Any other folder contents will be ignored for these purposes.
 
-The **system library** is a library within the DSA installation, located in
-the `library/` subdirectory.
+The *system library* is a library within the DSA installation, located in the
+`library/` subdirectory.
 
-A **search path** is a fragment of a glob pattern used for finding files -
+A *search path* is a fragment of a glob pattern used for finding files -
 that is, folder names and/or shell wildcards, separated by forward slashes.
 
-A **target** is a symbolic name used to filter the contents of library
-folders. It specifies relative paths within each of the top-level folders of
-the library that will be searched for .py or .txt files (according to which
+A *target* is a symbolic name used to filter the contents of library folders.
+It specifies relative paths within each of the top-level folders of the
+library that will be searched for .py or .txt files (according to which
 top-level folder it is). When constructing a language, the same set of
 relative paths is used in each top-level folder, of each library used.
 
