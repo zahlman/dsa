@@ -7,3 +7,5 @@ visit https://creativecommons.org/licenses/by-nc-sa/4.0/ .
 The `future/` subdirectory contains documentation for planned features that
 have not yet been implemented, or describing intended future behaviour that
 differs from the current behaviour of the code.
+
+`toplevel.txt` is the best place to start reading the current documentation.
