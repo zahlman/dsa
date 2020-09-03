@@ -1,0 +1,136 @@
+This work is licensed under the Creative Commons
+Attribution-NonCommercial-ShareAlike 4.0 International License. To view a copy
+of this license, visit https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+Overview
+--------
+
+DSA uses plain text files for its type definitions, structgroup definitions,
+codec data and disassembly listings. A `.txt` filename extension is
+recommended for these files, and UTF-8 encoding is assumed. This document
+describes common rules by which the files are preprocessed and tokenized.
+
+The interpretation of the resulting tokens is discussed in separate
+documentation. Please see:
+
+* `interpreters.txt` for type and structgroup definition files
+
+* `output.txt` for disassembly listings
+
+* `codecs.txt` for codec data files
+
+Preprocessing
+-------------
+
+The file is preprocessed to strip comments, extract documentation, join up
+long lines, and normalize whitespace, as follows:
+
+* Leading and trailing whitespace are stripped; if the line had leading
+  whitespace, this is noted.
+
+* Everything on a source line of the file from a `#` character onwards, as
+  long as it appears outside of a quoted string, is removed as a comment.
+
+* Lines now starting with `+` are treated as a continuation of the previous
+  line. The `+` sign is removed; any whitespace that followed the `+` is
+  preserved.
+
+* If the resulting line starts with `!`, it is identified as a "meta" line,
+  and if it had leading whitespace originally, it is identified as an
+  "indented" line. All other lines are identified as "unindented" lines.
+
+Tokenization
+------------
+
+Each line resulting from the above process is now tokenized:
+
+* Each token conceptually consists of one or more "parts", and may or may not
+  be marked as a "label".
+
+* Whitespace is required between tokens.
+
+* Tokens may be either quoted strings, "bracketed" tokens, or "plain" tokens.
+  Quoted-string tokens may use either single or double quotes, and are
+  interpreted as though they were Python literals (except that string prefixes
+  and triple-quotes are not supported).
+
+* Quoted-string tokens may not be labels, and may have only a single part.
+  Bracketed and plain tokens are prefixed with `@` to denote that they are
+  labels. `@` is not a valid token by itself.
+
+* The remainder of a plain token is any text not including whitespace,
+  a square bracket, a single or double quotation mark, `#` or `@`. Note in
+  particular that `!` *is* allowed (except of course for the first token of a
+  line, which would be consumed in preprocessing). The remainder of a
+  bracketed token may also contain quotation marks and whitespace.
+
+* The parts of bracketed and plain tokens are separated using `:`, `,` or a
+  mixture of the two (these are treated as equivalent in all regards).
+
+* Whitespace within each part of a bracketed token is normalized: leading and
+  trailing whitespace is removed, and internal whitespace sequences are
+  replaced with a single space character each.
+
+In general, when part of a token is expected to represent an integer value, it
+is interpreted as if it were passed to the built-in `int` with a `base` of
+`0`. That is to say, they may be written in decimal, or in binary with a `0b`
+prefix, or in octal with a `0o` prefix, or in hexadecimal with a `0x` prefix.
+However, conversion of the value *does not happen at this point*. This allows
+for custom types to override the interpretation of the value. For example, the
+built-in `hexdump` type uses this to interpret `42` as 0x42, i.e., 66.
+
+Examples
+--------
+
+1. Consider a file containing:
+
+!first @second#third
+   + !fourth
+
+This is preprocessed to a single meta line:
+
+first @second !fourth
+
+Note that the comment is stripped despite the lack of whitespace, and the
+whitespace between `+` and `!fourth is added. The indentation before the `+`
+is ignored; since that line was used to continue the previous line, no
+indented line is recorded.
+
+The line is then tokenized in three tokens, each with a single part: `first`,
+`second` and `!fourth`. The `second` token is considered a label.
+
+2. Consider a file containing:
+
+![1 ,  2  : 3]
+[!4 :  5  , 6] !7 ,  8  : 9
+
+The first line is meta, and the second is not. The first line has a single
+token with parts `1`, `2` and `3`, after whitespace normalization.
+
+The second line has *eight* tokens. The first has parts `!4`, `5` and `6`
+(note the equivalence of `,` and `:`). The `!7`, `8` and `9` are
+straightforward: they are plain tokens with a single part each, as they
+contain no special characters (aside from the `!`, which only has special
+meaning at the beginning of a line). The `,` and `:` are also plain tokens by
+themselves; since they are also separator characters, those tokens have two
+parts (both empty) each.
+
+3. Consider a file containing:
+
+[!example] "double-quoted    \toke\ns [aren't weird]"
+![] @[] 'single-quoted:tokens]@!#[aren\'t:weird,either'
+
+Although a line cannot start with a plain token that starts with `!`, a
+bracketed token can be used to "escape" the `!` character (even if the token
+should only have a single part and no internal whitespace). `[]` can also be
+used to make empty, single-part tokens, with or without a label (recall that
+`@` is explicitly disallowed as a token by itself, and of course token must
+have some text to it).
+
+The quoted-string tokens may contain any character, even characters with
+special syntax meaning. Whitespace is preserved and the token is not split
+into parts. The string is interpreted as a Python string literal, so in this
+example the text of the double-quoted token includes a literal tab and
+newline. A backslash escape is used for the apostrophe in the single-quoted
+token; this again works as it would in Python (or many other programming
+languages).

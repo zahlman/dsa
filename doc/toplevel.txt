@@ -1,0 +1,81 @@
+This work is licensed under the Creative Commons
+Attribution-NonCommercial-ShareAlike 4.0 International License. To view a copy
+of this license, visit https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+DSA - a Data Structure Assembler
+--------------------------------
+
+This project provides a powerful, customizable assembler and disassembler for
+arbitrary binary data, written in pure Python. The rules for assembly and
+disassembly can be implemented either with Python code plugins, a
+domain-specific language or both. The system is designed to handle simple
+cases (such as an "array of structs" stored in the static data of an
+executable) simply, while still making it possible to make sense of more
+complex data (for example: text with embedded custom control codes; or
+compressed image data; or script bytecode with variable-length opcodes and
+embedded references to elsewhere in the file).
+
+The primary goal of DSA is to empower you to examine and make sense of
+binaries easily - rather than staring bleary-eyed at a hex editor - and create
+documented, understandable, plain-text patches for those binaries just as
+easily. However, if you create plugin content to handle a new custom data
+format, your plugins also serve as a sort of documentation.
+
+Overview
+--------
+
+(NOTE: In this documentation, "DSA" means the software generally; `dsa` means
+either the command-line interface to the assembler, or the root Python package
+of DSA's code, as appropriate.)
+
+Conceptually, the data disassembled by DSA from your binary consists of one or
+more *chunks*. You specify the *root chunk* when invoking the disassembler,
+and others are found by following pointers in the data. (The plugged-in
+business logic determines which bytes constitute pointers, where they
+point, and - recursively - what rules to use to disassembly the pointed-at
+chunks.) This process produces a *disassembly listing* consisting of one or
+more *blocks* in a plain-text output file.
+
+Similarly, you can write (or edit) a file in the same format, and assemble it
+to produce chunks of binary data, which are then written over the original
+data at specified locations (you can specify a separate binary file for output
+rather than modifying the original).
+
+Each chunk is disassembled by an *interpreter*, which may either be
+implemented as a Python plugin or using a *structgroup* (created from a
+plain-text configuration). The data may additionally be preprocessed using
+*filter*s. Interpreters and filters may both be configured using *codec*s. The
+files used to create interpreters, filters and codecs are collectively called
+a *library*. The corresponding set of interpreters, filters and codecs used
+for a given attempt at assembly or disassembly is called a *language*.
+
+Command-line interface
+----------------------
+
+The following commands are provided:
+
+* `dsa` - the assembler.
+* `dsd` - the disassembler.
+* `dsa-use` - adds or updates a symbolic library name (see `libraries.txt`).
+* `dsa-drop` - disables a symbolic library name (see `libraries.txt`).
+
+You can run each of these with the `-h` flag for detailed command-line help.
+
+See also
+--------
+
+`api.txt` [TODO] details how to use the `dsa` package in your code.
+
+`codecs.txt`, `filters.txt` [TODO] and `interpreters.txt` detail DSA's system
+for specifying business logic.
+
+`files.txt` explains the general format of the plain-text files used by DSA -
+a common scheme used by codec data, structgroup definitions, type definitions
+(used by structgroup definitions) and assembly listings.
+
+`libraries.txt` explains how to organize your files into a library; how to
+specify which files to use to create a language; and how `dsa-use` and
+`dsa-drop` can make it easier to use your libraries with `dsa` and `dsd`.
+
+`output.txt` details the contents of the disassembler output (and expectations
+for assembler input).
