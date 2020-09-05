@@ -10,6 +10,8 @@ codec data and disassembly listings. A `.txt` filename extension is
 recommended for these files, and UTF-8 encoding is assumed. This document
 describes common rules by which the files are preprocessed and tokenized.
 
+**Please note that these rules are subject to change in the near future.**
+
 The interpretation of the resulting tokens is discussed in separate
 documentation. Please see:
 
@@ -22,27 +24,27 @@ documentation. Please see:
 Preprocessing
 -------------
 
-The file is preprocessed to strip comments, extract documentation, join up
-long lines, and normalize whitespace, as follows:
+The file, conceptually, undergoes some preprocessing before being tokenized
+(though this is done at the same time, in a single pass over the data):
+
+* Everything on a source line of the file from a `#` character onwards, as
+  long as it appears outside of a quoted string, is ignored as a comment.
+
+* Lines starting with `+` are treated as a continuation of the previous line.
+  The `+` sign is removed. The continuation will be tokenized separately; it
+  is not possible to split a token across lines this way.
 
 * Leading and trailing whitespace are stripped; if the line had leading
   whitespace, this is noted.
 
-* Everything on a source line of the file from a `#` character onwards, as
-  long as it appears outside of a quoted string, is removed as a comment.
-
-* Lines now starting with `+` are treated as a continuation of the previous
-  line. The `+` sign is removed; any whitespace that followed the `+` is
-  preserved.
-
-* If the resulting line starts with `!`, it is identified as a "meta" line,
-  and if it had leading whitespace originally, it is identified as an
-  "indented" line. All other lines are identified as "unindented" lines.
+* Lines (unless they are a continuation) starting with `!`, are identified as
+  "meta" lines; lines starting with whitespace are identified as "indented"
+  lines. Other lines are identified as "unindented" lines.
 
 Tokenization
 ------------
 
-Each line resulting from the above process is now tokenized:
+The following rules apply to tokenize the resulting preprocessed lines:
 
 * Each token conceptually consists of one or more "parts", and may or may not
   be marked as a "label".
@@ -58,11 +60,11 @@ Each line resulting from the above process is now tokenized:
   Bracketed and plain tokens are prefixed with `@` to denote that they are
   labels. `@` is not a valid token by itself.
 
-* The remainder of a plain token is any text not including whitespace,
-  a square bracket, a single or double quotation mark, `#` or `@`. Note in
-  particular that `!` *is* allowed (except of course for the first token of a
-  line, which would be consumed in preprocessing). The remainder of a
-  bracketed token may also contain quotation marks and whitespace.
+* The remainder of a plain token is any text not including whitespace, a
+  square bracket, a single or double quotation mark, `#` or `@`. Note in
+  particular that `!` *is* allowed (except of course that, at the beginning of
+  a line, it will be interpreted as a marker for meta lines). The remainder of
+  a bracketed token may also contain quotation marks and whitespace.
 
 * The parts of bracketed and plain tokens are separated using `:`, `,` or a
   mixture of the two (these are treated as equivalent in all regards).
@@ -85,35 +87,38 @@ Examples
 1. Consider a file containing:
 
 !first @second#third
-   + !fourth
++!fourth
 
-This is preprocessed to a single meta line:
+This is treated as a single line, equivalent to:
 
 first @second !fourth
 
-Note that the comment is stripped despite the lack of whitespace, and the
-whitespace between `+` and `!fourth is added. The indentation before the `+`
-is ignored; since that line was used to continue the previous line, no
-indented line is recorded.
+Note that the comment is stripped despite the lack of whitespace, and that
+`!fourth` is treated as a separate token. The `+` must appear at the start of
+the line, with no leading whitespace, to have this line-continuation effect.
 
-The line is then tokenized in three tokens, each with a single part: `first`,
-`second` and `!fourth`. The `second` token is considered a label.
+The line is then processed into three tokens, each with a single part:
+`first`, `second` and `!fourth`. The `second` token is considered a label.
 
 2. Consider a file containing:
 
-![1 ,  2  : 3]
++![1 ,  2  : 3]
 [!4 :  5  , 6] !7 ,  8  : 9
 
 The first line is meta, and the second is not. The first line has a single
-token with parts `1`, `2` and `3`, after whitespace normalization.
+token with parts `1`, `2` and `3`, after whitespace normalization. Note that
+`+` *is* permitted on the first (non-empty, non-comment) line; it results in a
+line number of 0 being reported, since it is "continuing" an empty line from
+before the start of the file. (This somewhat strange behaviour was preserved
+when it was noticed in testing, in case it might be useful later.)
 
 The second line has *six* tokens. The first has parts `!4`, `5` and `6`
 (note the equivalence of `,` and `:`). The `!7`, `8` and `9` are
 straightforward: they are plain tokens with a single part each, as they
 contain no special characters (aside from the `!`, which only has special
 meaning at the beginning of a line). The `,` and `:` are also plain tokens by
-themselves; since they are also separator characters, those tokens have two
-parts (both empty) each.
+themselves; since they are also separator characters, those tokens each have
+two parts, both of which are empty.
 
 3. Consider a file containing:
 
@@ -124,7 +129,7 @@ Although a line cannot start with a plain token that starts with `!`, a
 bracketed token can be used to "escape" the `!` character (even if the token
 should only have a single part and no internal whitespace). `[]` can also be
 used to make empty, single-part tokens, with or without a label (recall that
-`@` is explicitly disallowed as a token by itself, and of course token must
+`@` is explicitly disallowed as a token by itself, and of course a token must
 have some text to it).
 
 The quoted-string tokens may contain any character, even characters with
@@ -134,3 +139,29 @@ example the text of the double-quoted token includes a literal tab and
 newline. A backslash escape is used for the apostrophe in the single-quoted
 token; this again works as it would in Python (or many other programming
 languages).
+
+4. Here are some examples of indented lines:
+
+    indented
+ !also     
++indented
+     forsooth, indented
+
+The amount of indentation does not matter, and neither does it matter if tabs
+or spaces (or both) are used; all of these are simply recorded as indented
+lines. Trailing whitespace is also irrelevant. Note that in error messages,
+the last line of this example would be reported as line 4, even though the
+previous line had a continuation. Because line 2 is indented, the `!` is not
+treated as a meta line marker, and becomes part of the `!also` token.
+
+5. Here are some examples of invalid lines:
+
+[first][second]
+first @ second
+[first
++second]
+
+The first line fails because there is no whitespace between the tokens; the
+second line fails because the empty label is invalid. The fourth line is not
+able to continue the token from the third line; so each line, considered in
+isolation, has an unmatched square bracket.

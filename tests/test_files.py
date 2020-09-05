@@ -2,11 +2,12 @@
 # Licensed under the Open Software License version 3.0
 
 # System under test.
+from dsa.errors import UserError
 from dsa.parsing.file_parsing import process, load_lines
 # Third-party.
 import pytest
 
-examples = [
+good = (
     # Examples from the documentation.
     ('!first @second#third', '+!fourth'),
     ('![1 ,  2  : 3]', '[!4 :  5  , 6] !7 ,  8  : 9'),
@@ -14,12 +15,11 @@ examples = [
         r'''[!example] "double-quoted    \toke\ns [aren't weird]"''',
         r"""![] @[] 'single-quoted:tokens]@!#[aren\'t:weird,either'"""
     ),
-    # example with indented lines and a line after a continuation.
-    ('    indented', ' also     ', '+indented', '\t forsooth, indented')
-]
+    ('    indented', ' !also     ', '+indented', '\t forsooth, indented')
+)
 
 
-expected_tokens = (
+expected = (
     (
         (1, '!', [
             ['first'], ['@', 'second'], ['!fourth']
@@ -45,12 +45,24 @@ expected_tokens = (
     # (Subsequent code merely checks whether it's '!' or ''.)
     (
         (1, ' ', [['indented']]),
-        (2, ' ', [['also'], ['indented']]),
+        (2, ' ', [['!also'], ['indented']]),
         (4, '\t', [['forsooth', ''], ['indented']])
     )
 )
 
 
-@pytest.mark.parametrize('i,o', zip(examples, expected_tokens))
-def test_process(i, o):
+bad_lines = ('[first][second]', 'first @ second', '[first', '+second]')
+bad = (bad_lines[i:] for i in range(len(bad_lines)))
+
+
+@pytest.mark.parametrize('i,o', zip(good, expected))
+def test_process_good(i, o):
     assert tuple(process(i)) == o
+
+
+@pytest.mark.parametrize('i', bad)
+def test_process_bad(i):
+    # Each line in the 'bad' sample raises an error, regardless of the
+    # subsequent lines.
+    with pytest.raises(UserError):
+        next(process(i))
