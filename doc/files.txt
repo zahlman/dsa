@@ -107,7 +107,7 @@ The line is then tokenized in three tokens, each with a single part: `first`,
 The first line is meta, and the second is not. The first line has a single
 token with parts `1`, `2` and `3`, after whitespace normalization.
 
-The second line has *eight* tokens. The first has parts `!4`, `5` and `6`
+The second line has *six* tokens. The first has parts `!4`, `5` and `6`
 (note the equivalence of `,` and `:`). The `!7`, `8` and `9` are
 straightforward: they are plain tokens with a single part each, as they
 contain no special characters (aside from the `!`, which only has special
