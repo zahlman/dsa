@@ -40,6 +40,10 @@ def _chunk_header(label, location, name):
     return ('!', ('@', label), (f'0x{location:X}',), name)
 
 
+def _format_args(args):
+    return '<unknown>' if args is None else ', '.join(args)
+
+
 class _DummyChunk:
     def __init__(self, interpreter_args, label):
         # We might have "unrecognized" args that we need to check later.
@@ -60,7 +64,8 @@ class _DummyChunk:
     def verify_args(self, args, where):
         CHUNK_TYPE_CONFLICT.require(
             args == self._interpreter_args, where=where,
-            previous=', '.join(self._interpreter_args), current=', '.join(args)
+            current=_format_args(args),
+            previous=_format_args(self._interpreter_args)
         )
 
 

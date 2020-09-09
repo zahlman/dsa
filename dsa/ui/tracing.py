@@ -3,6 +3,7 @@
 
 from functools import wraps
 from time import time
+import sys
 
 
 """A simple logging system with timing and indentation."""
@@ -50,6 +51,7 @@ class TimingTracer:
     def stop(self, tag):
         elapsed = int((time() - self._timestamps.pop()) * 1000)
         self.trace(f'{tag} ({elapsed} ms)')
+        sys.stdout.flush()
 
 
     def __call__(self, message):

@@ -65,6 +65,7 @@ class _ReportingParser(DefaultParser):
             with my_tracer(self._message):
                 self.raw_call(parsed_args)
         except Exception as e:
+            sys.stdout.flush()
             _errmsg(' OOPS '.center(58, '-'))
             if isinstance(e, IOError):
                 _io_error(e)

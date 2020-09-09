@@ -4,7 +4,7 @@ build-backend = "poetry.masonry.api"
 
 [tool.poetry]
 name = "dsa"
-version = "0.19.1+292"
+version = "0.19.2+300"
 description = "Data Structure Assembler - a tool for making sense of binary data"
 license = "OSL-3.0"
 authors = [ "Karl Knechtel <karl.a.knechtel@gmail.com>",]
