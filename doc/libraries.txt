@@ -2,15 +2,27 @@ This work is licensed under the Creative Commons
 Attribution-NonCommercial-ShareAlike 4.0 International License. To view a copy
 of this license, visit https://creativecommons.org/licenses/by-nc-sa/4.0/ .
 
-Definitions
------------
+Overview
+--------
 
-A *language* is a Python class instance that encapsulates the logic and
-business rules needed to assemble or disassemble binary data with DSA.
+Before DSA can assemble or disassemble data, it must be configured with a full
+description of the data format in use. This configuration, herein called a
+*language*, is produced from a mixture of Python source code and plain-text
+files that implement a domain-specific language for describing data
+structures.
 
-A *library* is a folder with data used by DSA to construct languages. It must
-have a configuration file named `targets.toml` at its root, and should have
-one or more of the following folders:
+These files are organized into folders called *libraries*. Languages are
+initialized using one or more libraries; the contents of each library used may
+be filtered by specifying a *target*. The root folder of the library contains
+a configuration file that maps the target into *search paths*. DSA uses these
+search paths to construct glob patterns, which it then uses to select files
+from the library. The same target is used to filter every library folder.
+
+Library schema
+--------------
+
+A library folder must have a configuration file named `targets.toml` at its
+root, and should contain one or more of the following subdirectories:
 
     * `codec_code`: contains .py files with logic for loading codecs.
     * `codec_data`: contains .txt files with codec configuration data.
@@ -24,21 +36,6 @@ one or more of the following folders:
 
 Any other folder contents will be ignored for these purposes.
 
-The *system library* is a library within the DSA installation, located in the
-`library/` subdirectory.
-
-A *search path* is a fragment of a glob pattern used for finding files -
-that is, folder names and/or shell wildcards, separated by forward slashes.
-
-A *target* is a symbolic name used to filter the contents of library folders.
-It specifies relative paths within each of the top-level folders of the
-library that will be searched for .py or .txt files (according to which
-top-level folder it is). When constructing a language, the same set of
-relative paths is used in each top-level folder, of each library used.
-
-Syntax of `targets.toml`
-------------------------
-
 The targets.toml file should not contain any tables. It should simply be a
 mapping of targets to search paths, for example: `A = ["A/**", ""]`. This
 denotes that the language corresponding to the `A` target will use files at
@@ -48,8 +45,7 @@ specified for a target named `*` will be used for all other targets as well.
 
 In detail: when DSA searches for, for example, filters with which to construct
 a language, given a search path of `A/**` it will construct the glob pattern
-`filters/A/**/*.py`, evaluated recursively relative to the library root. All
-files matching the glob will be used to construct filters.
+`filters/A/**/*.py`, and evaluate it recursively relative to the library root. All files matching the glob will be used to construct filters.
 
 This targeting system allows you to maintain related library files for
 multiple disassembly projects. Suppose for example that you have to binary
@@ -99,7 +95,8 @@ the system library will be used; otherwise, it must be added back explicitly
 if you want to use it.
 
 If a target is specified, a search path is looked up separately for each
-library and applied when gathering files from that library.
+library and applied when gathering files from that library. In the system
+library, all files are used for all targets.
 
 Continuing from the above example, specifying `-l path/to/my_library -t A`
 will result in `common_loader.py`, `A_loader.py`, `common_codecs.txt` and
