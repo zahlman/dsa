@@ -2,4 +2,312 @@ This work is licensed under the Creative Commons
 Attribution-NonCommercial-ShareAlike 4.0 International License. To view a copy
 of this license, visit https://creativecommons.org/licenses/by-nc-sa/4.0/
 
-[TODO]
+Overview
+--------
+
+A DSA *language* consists of a combination of *interpreter*s that translate
+between binary data and a text description, *filter*s that convert between
+binary data formats (for example, to apply compression or rearrange bitmaps),
+and *codec*s that provide additional, context-sensitive configuration data for
+filters and interpreters.
+
+Interpreters are the most important part of this system; the others are not
+strictly necessary - although they can help greatly with making the code
+better organized and more reusable. An interpreter can be implemented either
+by using a domain-specific language built around the concept of a
+*structgroup*, or in Python code that satisfies a plugin API. This document
+attempts to explain both approaches.
+
+Assembly and disassembly
+------------------------
+
+Any given interpreter is used by DSA to disassemble a single, contiguous
+*chunk* of data from the source binary to produce a textual description (a
+*block* in a *disassembly listing*).
+
+During disassembly, an interpreter may signal to DSA that a given piece of
+data represents a pointer to another chunk. DSA will infer which interpreter
+to use for that chunk, and enqueue the task to disassemble it. During
+assembly, each block explicitly indicates which interpreter should be used to
+assemble it. (There is no need to follow pointers since DSA will just
+iterate over blocks in the listing.)
+
+Structgroup-based interpreters
+------------------------------
+
+The simplest way to create an interpreter is by using a structgroup. This
+approach conceives of the chunk as a sequence of data *struct*s, each of which
+contains a fixed number of pieces of data, each of a specified *type*. The
+structgroup encodes rules for which structs can appear at what points in the
+sequence, and for inferring when the chunk has ended.
+
+Type file format
+----------------
+
+A type file is parsed according to the general rules described in `files.txt`.
+It contains no meta lines - it just consists of a sequence of descriptions of
+types and *enum*s, which may subsequently be used in structgroup files. (There
+is no set association between type files and structgroup files; the language
+loader simply accumulates all the types and enums, and then makes loads the
+structgroups in the next pass, making the types and enums available by
+symbolic name.)
+
+A type may be either a *pointer* type or a *value* type. Pointer types use the
+underlying data to locate other chunks, and specify the interpreter and
+filters to use with said chunks. Value types, on the other hand, represent
+raw data as numbers, text or some combination. They can divide a short
+sequence of bytes into one or more *fields*, the value for each of which is
+rendered as either an integer, fixed-sized text (using a specified encoding),
+or an enumeration value (specified by an enum).
+
+An enum's specification looks like:
+
+enum example
+    0 zero
+    1:3 small
+
+This specifies that a value parsed with the `example` enum may only have
+numeric value 0 through 3 inclusive. A numeric value of 0 will be represented
+in disassembly with the text `zero`; values of 1 through 3 will be represented
+as `small<0>` through `small<2>`. The enum may specify alternate
+representations for a given numeric value; the disassembler will use the first
+option presented, while the assembler will accept any option presented.
+
+A value type's specification looks like:
+
+type name
+    8 x signed base:10
+    8 y values:example
+
+This describes a value type named `name` (the symbolic name that will be used
+later in structgroup files), which represents two bytes (8 + 8 = 16 bits) of
+data. The first 8 bits represent a signed integer, which will be represented
+in base 10 in the disassembly. (The default for disassembly is base 16; the
+assembler will accept any base.) The second 8 bits represent a value of the
+`example` enum.
+
+A pointer type's specification looks like:
+
+pointer name 8 referent:example
+    filter_a
+    filter_b
+
+This describes a pointer type named `name` (the symbolic name that will be
+used later in structgroup files), which points to a chunk that will have the
+`filter_a` and `filter_b` filters applied, and subsequently interpreted using
+the `example` interpreter. The pointer is 8 bits (i.e. 1 byte) long; the
+numeric value of that single byte is interpreted as an offset from the start
+of the binary file. In real-world applications, when static data with these
+sorts of pointers in it, the assumption is that the file will be memory-mapped
+to some virtual address; you can account for this by specifying a `bias:` on
+the first line, and you can also allow for a `stride` of the pointer. The
+chunk is located thus:
+
+<offset into file> = (<raw data value> * <stride>) + <bias>
+<raw data value> = (<offset into file> - <bias>) / <stride>
+
+There are other options that can be specified as well (documentation [TODO]).
+
+Structgroup file format
+-----------------------
+
+A structgroup file is parsed according to the general rules described in
+`files.txt`. It contains no meta lines; the first, unindented line is a
+header, and the rest of the file is a sequence of descriptions of structs. A
+given structgroup file, in combination with type definitions taken from zero
+or more type files, describes a single interpreter.
+
+The header must contain a token specifying the expected alignment of chunks
+for this interpreter. It looks like `align:X` (or `[align, X]`, etc.), where X
+is a positive integer value (1 or greater). DSA will signal an error during
+disassembly if the chunk's location is not a multiple of the specified value,
+or during assembly if the block specifies a destination address that is not a
+multiple of the specified value. DSA will also infer padding between structs
+in the chunk, such that each starts at an aligned location.
+
+The header may also contain multi-part "argument" tokens like:
+
+* `first:X:Y:Z` specifies that structs named `X`, `Y` and/or `Z` may appear
+  as the first struct in the chunk. (Any number of names may be specified; if
+  no names are specified, or this token is missing, then any struct in the
+  structgroup may appear first.)
+
+* `count:X`, where X is a positive integer value (1 or greater), indicates
+  that the chunk contains exactly that many structs.
+
+* `terminator:X`, where X is a hex dump (valid input for Python's
+  `bytes.fromhex` method; that is, a sequence of hex digits, possibly with
+  whitespace between pairs of digits), specifies a special sequence of bytes
+  used to mark the end of the chunk. During disassembly, DSA will look for
+  this sequence before it looks for a valid struct. During assembly, DSA will
+  encode this data after encoding all the structs listed in the block.
+
+* `labels:X`, where X is the name of an enum specified in some type
+  description files, specifies that names from that enum should be used to
+  label the structs in the output block during disassembly. `label_offset:X`,
+  where X is an integer, gives the effective index for the first chunk in the
+  struct (used for looking up an enum name for labelling purposes). Since this
+  is difficult to explain in abstract, an example is provided further below.
+
+Each struct description starts with a single, unindented line giving the
+struct's name, followed by zero or more indented lines describing the struct's
+*member*s. We will take for example the built-in `hex` structgroup, which
+defines the following struct:
+
+HEXD
+    hexdump b0
+    hexdump b1
+    hexdump b2
+    hexdump b3
+    hexdump b4
+    hexdump b5
+    hexdump b6
+    hexdump b7
+    hexdump b8
+    hexdump b9
+    hexdump ba
+    hexdump bb
+    hexdump bc
+    hexdump bd
+    hexdump be
+    hexdump bf
+
+Here, `b0` through `bf` are names given to the members of the struct, for
+error reporting purposes. Each is of type `hexdump`, defined in a type file
+(see the next section). The struct is named `HEXD`; this name appears in the
+corresponding disassembly listings. When the chunk is disassembled, then, this
+struct will produce lines like
+
+HEXD 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F
+
+where HEXD identifies the struct, and the other entries represent the original
+binary data, parsed according to the `hexdump` type.
+
+Each indented line describes a member of the struct. The first token on the
+line specifies the member's type; it may also provide a fixed value. If there
+is more than one part of the token, the parts after the first will be parsed
+as if they had appeared in a disassembly listing. For example, a member
+specified as `hexdump:42` would require the underlying data to contain a byte
+with value 0x42 in that position (omitting it from the listing during
+disassembly, and inserting it during assembly).
+
+If the member's value is not fixed, the typename should be specified by a
+member name (for error reporting purposes), and then possibly by some argument
+tokens that override the type's defaults.
+
+The first line of a struct may also specify (explanation [TODO]) that this
+struct is the last in a chunk, or which structs are allowed to follow it.
+
+Labelling example
+-----------------
+
+Suppose we have a type like:
+
+type example
+    8 value values:example
+
+enum example
+    1 one
+    3 three
+    5 five
+
+and a structgroup described like:
+
+align:1 labels:example label_offset:1 terminator:00
+
+DATA
+    example x
+
+This structgroup will only match bytes with values of 0x01, 0x03 or 0x05,
+expecting a 0x00 byte as a terminator for the chunk. Suppose we
+have such data in the binary: `05 03 01 03 05 00`, as a hex dump.
+
+The resulting disassembly block will generate five structs. The disassembler
+will attempt to label them, as follows: for the first struct, it will look up
+the value 1 (from the `label_offset`) in the `example` enum, finding the name
+`one`, and using that as a label. The data in this position is a 0x05 byte,
+which can indeed be represented by the `example` type, so the `DATA` struct
+definition is successfully matched.
+
+Since the value 2 is not represented by the enum, the next struct will simply
+not be labelled. Again the 0x03 byte is satisfactory, and another `DATA` entry
+is produced during disassembly.
+
+Proceeding through the data, we end up with the following disassembly fragment:
+
+@one
+DATA five
+DATA three
+@three
+DATA one
+DATA three
+@five
+DATA five
+
+which will be wrapped with the appropriate meta lines and appear as a block in
+the final output.
+
+The disassembly algorithm
+-------------------------
+
+When disassembling a structgroup, DSA will check between each struct to see if
+the chunk should terminate. Otherwise, it attempts to match the subsequent
+bytes against each struct permitted in the current position. For a struct to
+be used, each member with a fixed value must have those members correctly
+represented in the underlying data, and each other member must be parseable
+from the data: that is, if it has fields described by an enum, the values must
+be representable by the enum, and if it is a pointer type, it must meet any
+restrictions imposed on the `values`.
+
+If no struct can be found which matches in the current position, an error is
+reported; otherwise, the first successful match is used, and the process
+continues. There is no attempt at backtracking.
+
+Python-based interpreters
+-------------------------
+
+While implementing an interpreter with a Python plugin is overall more
+difficult, there is somewhat less to explain. The Python module must provide
+the following top-level functions:
+
+def disassemble(codec_lookup, config, chunk_label, data, register, label_ref):
+    """Produce formatted file contents for the chunk.
+    `codec_lookup` -> library of codecs that might be useful here.
+    `config` -> additional parameters specified by the Pointer to the chunk.
+    `chunk_label` -> label that will be applied to the chunk.
+    `data` -> underlying chunk data.
+    `register` -> callback to request disassembling another chunk.
+    `label_ref` -> callback to retrieve label text for a pointer."""
+
+The `config` parameter will get its value from the command line, or from the
+`referent` specified for the type of the pointer to the chunk (if it was found
+indirectly). It will be a sequence of strings, which were parts of a
+multi-part token (along with the interpreter name). Most commonly, if any
+`config` is expected at all, it would include the name of a codec to find in
+the `codec_lookup` dict (see `codecs.txt` for more information). The `data` is
+binary data in some form that supports the buffer interface (such as a `bytes`
+or `memoryview` object). Normally, chunks interpreted this way will not
+contain "pointers" (it is strongly recommended that you use the structgroup
+approach if you need to handle data that indirectly references other data
+elsewhere in the binary), so the callbacks can normally be ignored. The
+`chunk_label` is exposed here mainly so that the built-in system `file`
+interpreter can generate a corresponding file name.
+
+def item_size(token):
+    """Determine the amount of bytes corresponding to a chunk line,
+    according to the first token of the line."""
+
+Structgroup-based interpreters can automatically determine the number of bytes
+used to represent a struct based off the struct's definition. The plugin
+interface, symmetrically, supposes that each line of the disassembled block
+corresponds to a set amount of data, the size of which can be inferred from
+the first token of the line. This interface is probably changing in the near
+future.
+
+def assemble(codec_lookup, config, lines):
+    """Produce raw data representing the chunk for the binary.
+    The `lines` have already had labels resolved."""
+
+Given a sequence of tokenized (per the `files.txt` rules) lines from a block
+in the assembly listing, generate the corresponding binary data. This should
+return a `bytes` or `bytearray` object.
