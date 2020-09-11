@@ -104,7 +104,8 @@ class _Chunk:
         # FIXME: Does it make sense to handle this the same way?
         CHUNK_TYPE_CONFLICT.require(
             args == self._interpreter_args, where=where,
-            previous=', '.join(self._interpreter_args), current=', '.join(args)
+            current=_format_args(args),
+            previous=_format_args(self._interpreter_args)
         )
 
 
